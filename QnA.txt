@@ -1,0 +1,5 @@
+Pourquoi calculer un nouvel embedding (N) pour un graph plutôt que d'utiliser directement l'embedding original (O) ?
+Intuitivement, j'aurais tendance à penser qu'on perd de l'information si on garde N et jette O, puisqu'on peut facilement obtenir N à partir de O, mais difficilement O à partir de N.
+Qu'est-ce qui différencie O et N et qui rend N plus utilisable pour faire des prédictions ?
+
+Le NN spécialisé qu'on utilise pour faire des prédictions est entrainé séparément du GNN qui crée N ?
