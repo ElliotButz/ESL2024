@@ -30,7 +30,8 @@ def triples_from_csv(path_to_csv, columns_to_use = c.Node.features.value):
     for index, row in df.iterrows():
         for column in df.columns:
             if row[column] is not None:
-                triples.append([index, column, row[column]])
+                for predicate in row[column].split('|'):
+                    triples.append([index, column, predicate])
 
     # Create a dataframe from the list of triples
     return pd.DataFrame(triples, columns=['subject', 'predicate', 'object'])
