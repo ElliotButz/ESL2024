@@ -15,7 +15,7 @@ def load_go_file(path_to_go_file):
     loaded_go = obo_parser.GODag(path_to_go_file)
     return loaded_go
 
-def node_depth_in_go(node_id, ontology):
+def node_depth_in_go(node_id, ontology, mute_warning = True):
     '''
     Returns the length of the shortest path from a node to the root of a given ontology.
     /!\ IF NODE_ID NOT FOUND in the ontology, return -1 and raise a warning.
@@ -32,7 +32,9 @@ def node_depth_in_go(node_id, ontology):
         depth = int(ontology[node_id].level)
     except KeyError:
         depth = -1
-        warnings.warn(f"Warning...........Node ID '{node_id}' not found in the ontology.")
+        if mute_warning == False:
+          warnings.warn(f"Node ID '{node_id}' not found in the ontology.")
+        
     return depth
 
 
