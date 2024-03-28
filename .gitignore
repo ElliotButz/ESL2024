@@ -7,3 +7,6 @@ code/utils/__pycache__/load_and_manipulates_triples.cpython-311.pyc
 code/utils/__pycache__/work_with_go.cpython-311.pyc
 code/utils/test_goatools.ipynb
 __pycache__
+code/Old/
+code/tests/
+/wandb/
