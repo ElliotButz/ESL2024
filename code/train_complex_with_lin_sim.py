@@ -5,9 +5,11 @@ sys.path.append("/home/ebutz/ESL2024/code/utils")
 
 import numpy as np
 import pandas as pd
+import ast
 from tqdm import tqdm
 tqdm.pandas()
 
+import ast
 import random
 
 import torch
@@ -30,7 +32,7 @@ import wandb
 # ------------- Paths ------------- #
 
 # Iric
-mapped_iric_path = '/home/ebutz/ESL2024/data/mapped_iric.tsv'
+mapped_iric_path = '/home/ebutz/ESL2024/data/test_comma'
 
 # Model to train :
 hidden_channels = 15
@@ -58,8 +60,14 @@ print("Could reach GPU :", torch.Tensor([0,1]).to(device).is_cuda)
 
 print("\nLoading iric...")
 
-mapped_iric = pd.read_csv(mapped_iric_path, sep = '\t')
+mapped_iric = pd.read_csv(mapped_iric_path,
+                          sep = '\t', 
+                          names=['subject', 'predicate', 'object', 'mapped_subject', 'mapped_predicate', 'mapped_object','mapped_alt_tails'])
+mapped_iric['mapped_alt_tails'].map(ast.literal_eval)
 
+row1 = mapped_iric.iloc[0]
+print(type(row1['mapped_alt_tails']))
+print(mapped_iric.head())
 GO_to_map = mapped_iric.set_index('object')['mapped_object'].to_dict()
 map_to_GO = {value: key for key, value in GO_to_map.items()}
 
@@ -67,7 +75,7 @@ map_to_GO = {value: key for key, value in GO_to_map.items()}
 looks_ok: bool = True
 print('Number of triples in graph :', len(list(mapped_iric['object'])))
 for i in range(len(list(mapped_iric['object']))):
-    if GO_to_map[mapped_iric['object'][i]]!=mapped_iric['mapped_object'][i]:
+    if GO_to_map[mapped_iric['object'][i]]!=mapped_iric['mapped_object'][i] :
         looks_ok = False
 print('GO - Mapping dicts looks ok :', looks_ok)
 
@@ -77,50 +85,66 @@ for index, row in mapped_iric.iterrows():
     key = (row['mapped_subject'], row['mapped_predicate'])
     if key not in mapped_alt_tails:
         mapped_alt_tails[key] = set()
-    mapped_alt_tails[key].update(set(row['mapped_alt_tails']))
+        print(set(row['mapped_alt_tails'].values()))
+
+        try :
+            mapped_alt_tails[key].update(set(row['mapped_alt_tails']))
+        except:
+            # print("Problem with :",row['mapped_alt_tails'])
+            pass
+
 for key, value in mapped_alt_tails.items():
-    mapped_alt_tails[key]=np.array(list(value))
+    # mapped_alt_tails[key]=np.array(list(value))
+    mapped_alt_tails[key]=list(value)
 
 
-# ------------- Making datasets ------------- #
+print(list(mapped_alt_tails.items())[0])
 
-print("\nMaking datasets...")
-# Edges index
-heads = list(mapped_iric['mapped_subject'])
-tails = list(mapped_iric['mapped_object'])
-edge_index = torch.tensor([heads,tails], dtype=torch.long)
-# edges attributes
-edge_attributes = torch.tensor(mapped_iric['mapped_predicate'])
+# # ------------- Making datasets ------------- #
+
+# print("\nMaking datasets...")
+# # Edges index
+# heads = list(mapped_iric['mapped_subject'])
+# tails = list(mapped_iric['mapped_object'])
+# edge_index = torch.tensor([heads,tails], dtype=torch.long)
+# # edges attributes
+# edge_attributes = torch.tensor(mapped_iric['mapped_predicate'])
 
 
-iric_pyg = Data(
-                num_nodes = len(set(mapped_iric['object']).union(set(mapped_iric['subject']))),
-                edge_index = edge_index,
-                edge_attr = edge_attributes
-                )
+# iric_pyg = Data(
+#                 num_nodes = len(set(mapped_iric['object']).union(set(mapped_iric['subject']))),
+#                 edge_index = edge_index,
+#                 edge_attr = edge_attributes
+#                 )
 
-print(iric_pyg)
+# print(iric_pyg)
 
-print("\nDataset looks valid :",iric_pyg.validate(raise_on_error=True))
+# print("\nDataset looks valid :",iric_pyg.validate(raise_on_error=True))
 
-transform = RandomLinkSplit(
-                            num_val = 0.1,
-                            num_test = 0.1,
-                            is_undirected=False,
-                            add_negative_train_samples=False,
-                            )
+# transform = RandomLinkSplit(
+#                             num_val = 0.1,
+#                             num_test = 0.1,
+#                             is_undirected=False,
+#                             add_negative_train_samples=False,
+#                             )
 
-train_set, val_set, test_set = transform(iric_pyg)
-print('Dataset splits look valid (train, val, test):',train_set.validate(raise_on_error=True),
-                                                      val_set.validate(raise_on_error=True),
-                                                      test_set.validate(raise_on_error=True))
+# train_set, val_set, test_set = transform(iric_pyg)
+# print('Dataset splits look valid (train, val, test):',train_set.validate(raise_on_error=True),
+#                                                       val_set.validate(raise_on_error=True),
+#                                                       test_set.validate(raise_on_error=True))
 
-# ------------- Loading ontology ------------- #
+# # ------------- Loading ontology ------------- #
 
-print("\nLoading ontology...")
-nxo = from_file('/home/elliot/Documents/ESL2024/data/go-basic.json.gz')
-nxo.freeze()
+# print("\nLoading ontology...")
+# nxo = from_file('/home/elliot/Documents/ESL2024/data/go-basic.json.gz')
+# nxo.freeze()
 
-# ------------- train and evaluate ------------- #
+# # ------------- Init model ------------- #
+# complex_model = pwc.ComplEx_with_LinSim_labels(num_nodes=train_set.num_nodes,
+#                                                num_relations = train_set.edge_index.size()[1],
+#                                                hidden_channels=hidden_channels,
+#                                             ).to(device)
 
-pwc
+# # ------------- Train and evaluate ------------- #
+
+# pwc.train_and_test_complex()
