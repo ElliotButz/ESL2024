@@ -22,7 +22,6 @@ def train(loader, model, optimizer, device):
         total_examples += head_index.numel()
     return total_loss / total_examples
 
-
 def train_with_similarity_shrinkage(loader, model, optimizer, lin_term, ontology, device):
 
     '''
@@ -168,7 +167,7 @@ def train_and_test_complex(
         if eval_period:
             if epoch%eval_period == 0:
                 print('Eval...')
-                rank, mrr, hits = test(test_data, model=model, device=device)
+                rank, mrr, hits = test(test_data, model=model, device=device, batch_size=batch_size)
 
                 print(f'Epoch: {epoch:03d}, Val Mean Rank: {rank:.2f}',
                     f'Val MRR: {mrr:.4f}, Val Hits@10: {hits:.4f}')
