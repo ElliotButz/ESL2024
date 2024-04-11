@@ -87,17 +87,20 @@ def train_and_test_complex(
                            model,
                            train_data: torch_geometric.data.data.Data,
                            test_data : torch_geometric.data.data.Data,
-                           hidden_channels:int = None,
                            xp_name:str = '',
                            epochs: int = 1000,
                            batch_size: int = 4096,
-                           eval_period = 500,
+                           eval_period = 2,
                            reset_parameters = False,
                            params_save_path = '',
                            use_wandb = False,
                            device = 'cpu',
                            dataset_name = 'iric'
                            ):
+    
+    hidden_channels = model.hidden_channels
+    print(f"Train and test.\nModel type : {type(model)}\nHidden channels : 6 * {hidden_channels}\nEpochs : {epochs}\nEval period : {eval_period}\nUse WanDB : {use_wandb}")
+    print(f"Device : {device}", "Could reach GPU :", torch.Tensor([0,1]).to(device).is_cuda)
     
     
     # ----------------------------------------------- Reset parameters
@@ -137,7 +140,6 @@ def train_and_test_complex(
         )
 
     # ----------------------------------------------- Train and eval
-    print('Train...')
 
     torch.set_grad_enabled(True)
     model.to(device)
@@ -145,7 +147,6 @@ def train_and_test_complex(
     train_losses = []
     test_losses = []
     for epoch in range(0, epochs+1):
-
         loss = train(loader = loader,
                      model  = model,
                      optimizer = optimizer,
@@ -302,9 +303,9 @@ class ComplEx_with_LinSim_labels(tail_only_ComplEx):
 
         return F.binary_cross_entropy_with_logits(scores, target)
 
-class ComplEx_with_LinSim_labels_and_usual_loss(tail_only_ComplEx):
-  def loss(
-            self,
+class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
+  
+  def loss(self,
             head_index: torch.Tensor,
             rel_type: torch.Tensor,
             tail_index: torch.Tensor,
@@ -331,3 +332,37 @@ class ComplEx_with_LinSim_labels_and_usual_loss(tail_only_ComplEx):
         lin_target = torch.cat([pos_target, lin_neg_target], dim=0)
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
+  
+class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_usual_labels):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        ComplEx_with_LinSim_labels_and_usual_loss.loss() modified to have a normal(0,1) noise instead of Lin labels.
+        '''
+
+        pos = head_index, rel_type, tail_index
+
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score) 
+        neg_target = torch.zeros_like(neg_score)
+        # I replace this line :
+        # lin_neg_target = best_lin_sims_for_batch(*neg)
+        # with :
+        lin_neg_target = torch.rand(size = neg_target.size())
+
+        target = torch.cat([pos_target, neg_target], dim=0)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
+
