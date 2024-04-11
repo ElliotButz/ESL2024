@@ -3,6 +3,7 @@ import torch
 import torch_geometric
 import torch.optim as optim
 from torch_geometric.nn import ComplEx
+import torch.nn.functional as F
 import nxontology as nxo
 import copy
 import wandb
@@ -88,13 +89,13 @@ def train_and_test_complex(
                            train_data: torch_geometric.data.data.Data,
                            test_data : torch_geometric.data.data.Data,
                            xp_name:str = '',
+                           use_wandb = False,
                            epochs: int = 1000,
                            batch_size: int = 4096,
                            eval_period = 2,
                            reset_parameters = False,
                            params_save_path = '',
-                           use_wandb = False,
-                           device = 'cpu',
+                           device = 'cuda',
                            dataset_name = 'iric'
                            ):
     
@@ -359,10 +360,111 @@ class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_
         # I replace this line :
         # lin_neg_target = best_lin_sims_for_batch(*neg)
         # with :
-        lin_neg_target = torch.rand(size = neg_target.size())
+        # lin_neg_target = torch.rand(size = neg_target.size())
+        lin_neg_target = torch.zeros_like(neg_score)
 
         target = torch.cat([pos_target, neg_target], dim=0)
         lin_target = torch.cat([pos_target, lin_neg_target], dim=0)
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
 
+class best_LinSim_ComplEx(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to account a LinSim term :
+        one withdraw the mean(bests similarities between each false tail of a triple to its possible tails) to the loss.
+        '''
+
+        pos = head_index, rel_type, tail_index
+
+        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
+        neg = false_head_index, false_rel_type, false_tail_index
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score) 
+        neg_target = torch.zeros_like(neg_score)
+        target = torch.cat([pos_target, neg_target], dim=0)
+
+        # Calculating LinSim(positive_head, negative_head) : 
+        similarities = best_lin_sims_for_batch(head_index, rel_type, false_tail_index)
+
+        return F.binary_cross_entropy_with_logits(scores, target) - torch.mean(similarities)
+
+class LinSim_ComplEx(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
+        '''
+
+        pos = head_index, rel_type, tail_index
+
+        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
+        neg = false_head_index, false_rel_type, false_tail_index
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score) 
+        neg_target = torch.zeros_like(neg_score)
+        target = torch.cat([pos_target, neg_target], dim=0)
+
+        # stacking true and falses tails in df :
+        pos_and_neg_tails = pd.DataFrame(torch.stack((tail_index,false_tail_index)).transpose(0,1)).astype("int")
+
+        # Calculating LinSim(positive_head, negative_head) : 
+        similarities = torch.tensor(pos_and_neg_tails.apply(lambda row : lin_sim_on_mapped_terms(row[0], row[1]),
+                                                      axis = 1).values
+                                    )
+
+        return F.binary_cross_entropy_with_logits(scores, target) - torch.mean(similarities)
+
+class LinSim_Only_ComplEx(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
+        '''
+
+        pos = head_index, rel_type, tail_index
+
+        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
+        neg = false_head_index, false_rel_type, false_tail_index
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score) 
+        neg_target = torch.zeros_like(neg_score)
+        target = torch.cat([pos_target, neg_target], dim=0)
+
+        # stacking true and falses tails in df :
+        pos_and_neg_tails = pd.DataFrame(torch.stack((tail_index,false_tail_index)).transpose(0,1)).astype("int")
+
+        # Calculating LinSim(positive_head, negative_head) : 
+        similarities = torch.tensor(pos_and_neg_tails.apply(lambda row : lin_sim_on_mapped_terms(row[0], row[1]),
+                                                      axis = 1).values
+                                    )
+
+        return torch.tensor([1])- torch.mean(similarities)
