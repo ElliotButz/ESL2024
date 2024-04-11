@@ -10,3 +10,6 @@ __pycache__
 code/Old/
 code/tests/
 /wandb/
+code/Test_pipeline.ipynb
+code/test.py
+code/wandb/
