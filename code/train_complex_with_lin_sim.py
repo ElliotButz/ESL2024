@@ -27,8 +27,8 @@ from nxontology.imports import from_file
 # ------------- Paths ------------- #
 
 # Iric
-mapped_iric_path  = '/home/ebutz/ESL2024/data/full_iric/altailed_mapped_iric.pickle'
-altails_dict_path = '/home/ebutz/ESL2024/data/full_iric/altail_iric_DICT.pickle'
+mapped_iric_path  = '/home/ebutz/ESL2024/data/Os_to_GO_iric/altailed_Os_to_GO_iric.pickle'
+altails_dict_path = '/home/ebutz/ESL2024/data/Os_to_GO_iric/DICT_altailed_Os_to_GO_iric.pickle'
 
 # Model to train :
 hidden_channels = 176
@@ -36,7 +36,7 @@ batch_size      = 4096
 epochs          = 150
 eval_period     = 2
 lin_factor      = 1
-xp_name = f'LinSim labels vs others on full dataset with 6*{hidden_channels} HC'
+xp_name = f'LinSim labels vs others on full Os_to_GO dataset with 6*{hidden_channels} HC'
 
 params_save_name = f"PARAMS_ComplEx_6_times_{hidden_channels}_HC_{epochs}_epochs_{batch_size}_BS_on_full_iric"
 model_parameters_path = "/home/ebutz/ESL2024/data/mapping_datasets_and_model_for_genes_to_phenotypes_iric/"+params_save_name
