@@ -11,6 +11,7 @@ import sys
 sys.path.append( '/home/ebutz/ESL2024/code/utils' )
 import play_with_complex as pwc
 
+
 import torch
 import torch.optim as optim
 import torch_geometric
@@ -70,7 +71,6 @@ if check_dicts:
             looks_ok = False
     print('GO - Mapping dicts looks ok :', looks_ok)
 
-
 with open(altails_dict_path, 'rb') as handle:
     mapped_alt_tails = pickle.load(handle)
 print("Alternative tails dict (first key-value pair):", list(mapped_alt_tails.items())[0])
@@ -108,24 +108,60 @@ print('Dataset splits look valid (train, val, test):',train_set.validate(raise_o
                                                       val_set.validate(raise_on_error   = True),
                                                       test_set.validate(raise_on_error  = True))
 
-# # ------------- Loading ontology ------------- #
+# ------------- Loading ontology ------------- #
 
 print("\nLoading ontology...")
 nxo = from_file(ontology_path)
 nxo.freeze()
 
-# # ------------- Init model ------------- #
-model = pwc.ComplEx_with_normal_noise_and_usual_labels(num_nodes       = train_set.num_nodes,
-                                                       num_relations   = train_set.edge_index.size()[1],
-                                                       hidden_channels = hidden_channels,
-                                                       ).to(device)
+# ------------- Making global variables accessibles to pwc ------------- #
+
+pwc.map_to_GO        = map_to_GO
+pwc.nxo              = nxo
+pwc.mapped_alt_tails = mapped_alt_tails
+pwc.device           = device
+
+
+# ------------- Init model ------------- #
+
+summed_labels_with_LinSim = pwc.ComplEx_with_LinSim_labels_and_usual_labels(
+                                num_nodes       = train_set.num_nodes,
+                                num_relations   = train_set.edge_index.size()[1],
+                                hidden_channels = hidden_channels,
+                                ).to(device)
+
+summed_labels_with_RANDOMISED_LinSim = pwc.ComplEx_with_RANDOMISED_LinSim_labels_and_usual_labels(
+                                num_nodes       = train_set.num_nodes,
+                                num_relations   = train_set.edge_index.size()[1],
+                                hidden_channels = hidden_channels,
+                                ).to(device)
+
+summed_labels_with_noise = pwc.ComplEx_with_normal_noise_and_usual_labels(
+                                num_nodes       = train_set.num_nodes,
+                                num_relations   = train_set.edge_index.size()[1],
+                                hidden_channels = hidden_channels,
+                                ).to(device)
+
+
+
 
 # # ------------- Train and evaluate ------------- #
 
-pwc.train_and_test_complex(model      = model,
+pwc.train_and_test_complex(model      = summed_labels_with_LinSim,
                            train_data = train_set,
                            test_data  = test_set,
                            device     = device,
                            use_wandb  = True,
-                           xp_name    = 'Replacing additional Lin labels with pure gaussian noise [N(0;1)]'
+                           xp_name    = 'Add LinSim labels vs Noise Labels on full dataset',
+                           eval_period= 20
                            )
+
+pwc.train_and_test_complex(model      = summed_labels_with_noise,
+                           train_data = train_set,
+                           test_data  = test_set,
+                           device     = device,
+                           use_wandb  = True,
+                           xp_name    = 'Add LinSim labels vs Noise Labels on full dataset',
+                           eval_period= 20
+                           )
+

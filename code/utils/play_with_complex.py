@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import nxontology as nxo
 import copy
 import wandb
+import tqdm
 
 def train(loader, model, optimizer, device):
     model.train()
@@ -92,7 +93,7 @@ def train_and_test_complex(
                            use_wandb = False,
                            epochs: int = 1000,
                            batch_size: int = 4096,
-                           eval_period = 2,
+                           eval_period = 6,
                            reset_parameters = False,
                            params_save_path = '',
                            device = 'cuda',
@@ -197,7 +198,7 @@ def train_and_test_complex(
     return model, train_losses, train_losses
 
 
-def lin_sim_on_mapped_terms(mapped_term1, mapped_term2, map_to_GO:dict):
+def lin_sim_on_mapped_terms(mapped_term1, mapped_term2):
     term1 = map_to_GO[mapped_term1]
     term2 = map_to_GO[mapped_term2]
     if (term1 in nxo.graph._node and term2 in nxo.graph._node):
@@ -206,7 +207,7 @@ def lin_sim_on_mapped_terms(mapped_term1, mapped_term2, map_to_GO:dict):
     else:
         return 0  
 
-def best_lim_sim_for_triple(head, rel, tail, mapped_alt_tails:dict, map_to_GO)-> torch.Tensor:
+def best_lim_sim_for_triple(head, rel, tail)-> torch.Tensor:
     max_lin_sim=0
     for alt_tail in mapped_alt_tails[(head, rel)]:
 
@@ -223,6 +224,7 @@ def best_lim_sim_for_triple(head, rel, tail, mapped_alt_tails:dict, map_to_GO)->
 
 def best_lin_sims_for_batch(head_index:torch.Tensor, rel_type:torch.Tensor, tail_index:torch.Tensor):
 
+    head_index,rel_type,tail_index = head_index.cpu(),rel_type.cpu(),tail_index.cpu()
     batch = pd.DataFrame(torch.transpose(torch.stack((head_index,rel_type,tail_index)),
                                          0,1)
                         )
@@ -258,6 +260,8 @@ class tail_only_ComplEx(ComplEx):
     '''
     Overwritting random_sample() to make negative triples by setting a random tail to each triple,
     instead of setting a random head or tail.
+
+    Moreover, test() is made on 1000 triples instead of all existing triples.
     '''
     @torch.no_grad()
     def random_sample(
@@ -278,6 +282,51 @@ class tail_only_ComplEx(ComplEx):
         tail_index = shuffle_tensor(tail_index.clone())
 
         return head_index, rel_type, tail_index
+    
+    def test(
+        self,
+        head_index: torch.Tensor,
+        rel_type: torch.Tensor,
+        tail_index: torch.Tensor,
+        batch_size: int,
+        k: int = 10,
+        log: bool = True,
+    ) -> tuple[float, float, float]:
+        r"""Evaluates the model quality by computing Mean Rank, MRR and
+        Hits@:math:`k` across all possible tail entities.
+
+        Args:
+            head_index (torch.Tensor): The head indices.
+            rel_type (torch.Tensor): The relation type.
+            tail_index (torch.Tensor): The tail indices.
+            batch_size (int): The batch size to use for evaluating.
+            k (int, optional): The :math:`k` in Hits @ :math:`k`.
+                (default: :obj:`10`)
+            log (bool, optional): If set to :obj:`False`, will not print a
+                progress bar to the console. (default: :obj:`True`)
+        """
+        arange = range(min(1000,head_index.numel()))
+        arange = tqdm(arange) if log else arange
+
+        mean_ranks, reciprocal_ranks, hits_at_k = [], [], []
+        for i in arange:
+            h, r, t = head_index[i], rel_type[i], tail_index[i]
+
+            scores = []
+            tail_indices = torch.arange(self.num_nodes, device=t.device)
+            for ts in tail_indices.split(batch_size):
+                scores.append(self(h.expand_as(ts), r.expand_as(ts), ts))
+            rank = int((torch.cat(scores).argsort(
+                descending=True) == t).nonzero().view(-1))
+            mean_ranks.append(rank)
+            reciprocal_ranks.append(1 / (rank + 1))
+            hits_at_k.append(rank < k)
+
+        mean_rank = float(torch.tensor(mean_ranks, dtype=torch.float).mean())
+        mrr = float(torch.tensor(reciprocal_ranks, dtype=torch.float).mean())
+        hits_at_k = int(torch.tensor(hits_at_k).sum()) / len(hits_at_k)
+
+        return mean_rank, mrr, hits_at_k
     
 class ComplEx_with_LinSim_labels(tail_only_ComplEx):
   def loss(
@@ -316,24 +365,89 @@ class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos = head_index, rel_type, tail_index
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
 
         neg = self.random_sample(head_index, rel_type, tail_index)
 
         pos_score = self(*pos)
         neg_score = self(*neg)
 
-        scores = torch.cat([pos_score, neg_score], dim=0)
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
 
-        pos_target = torch.ones_like(pos_score) 
-        neg_target = torch.zeros_like(neg_score)
-        lin_neg_target = best_lin_sims_for_batch(*neg)
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+        neg_target = neg_target.to(device)
 
-        target = torch.cat([pos_target, neg_target], dim=0)
-        lin_target = torch.cat([pos_target, lin_neg_target], dim=0)
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
   
+
+class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        '''
+
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+        neg_target = neg_target.to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
+
+
+class ComplEx_with_RANDOMISED_LinSim_labels_and_usual_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        not-1 labels are shuffled.
+        '''
+
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = shuffle_tensor(best_lin_sims_for_batch(*neg)).to(device)
+        neg_target = neg_target.to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
 class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_usual_labels):
   
   def loss(self,
@@ -360,8 +474,8 @@ class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_
         # I replace this line :
         # lin_neg_target = best_lin_sims_for_batch(*neg)
         # with :
-        # lin_neg_target = torch.rand(size = neg_target.size())
-        lin_neg_target = torch.zeros_like(neg_score)
+        lin_neg_target = torch.rand(size=neg_target.size())
+        print(lin_neg_target)
 
         target = torch.cat([pos_target, neg_target], dim=0)
         lin_target = torch.cat([pos_target, lin_neg_target], dim=0)
