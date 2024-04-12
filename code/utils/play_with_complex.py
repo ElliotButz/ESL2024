@@ -163,9 +163,9 @@ def train_and_test_complex(
         train_losses.append(loss)
         test_losses.append(test_loss)
         
-        if use_wandb : 
-            wandb.log({"loss": loss, "loss on test": test_loss})
-        print(f'Epoch: {epoch:03d}')
+        # if use_wandb : 
+            # wandb.log({"loss": loss, "loss on test": test_loss})
+        print(f'Epoch: {epoch:03d}/{epochs}')
         print(f'Loss on train set : {loss:.4f}\nLoss on test set  : {test_loss:.4f}')
 
     # ----------------------------------------------- Periodic Evaluation
@@ -173,13 +173,18 @@ def train_and_test_complex(
             if epoch%eval_period == 0:
                 print('Eval...')
                 rank, mrr, hits = test(test_data, model=model, device=device, batch_size=batch_size)
+                print(f'Epoch: {epoch:03d}/{epochs}, Val Mean Rank: {rank:.2f}', f'Val MRR: {mrr:.4f}, Val Hits@10: {hits:.4f}')
 
-                print(f'Epoch: {epoch:03d}, Val Mean Rank: {rank:.2f}',
-                      f'Val MRR: {mrr:.4f}, Val Hits@10: {hits:.4f}')
-                if use_wandb:
-                    wandb.log({"Val Mean Rank" : rank,
-                            "Val MRR" : mrr,
-                            "hits@10": hits})
+        if use_wandb and epoch%eval_period == 0:
+            wandb.log({"Val Mean Rank" : rank,
+                               "Val MRR"       : mrr,
+                               "hits@10"       : hits,
+                               "loss"          : loss,
+                               "loss on test"  : test_loss})
+            
+        if use_wandb and epoch%eval_period != 0:
+            wandb.log({"loss"         : loss,
+                       "loss on test" : test_loss})
 
     # ----------------------------------------------- End WandB
     if use_wandb:
@@ -332,33 +337,6 @@ class tail_only_ComplEx(ComplEx):
         hits_at_k = int(torch.tensor(hits_at_k).sum()) / len(hits_at_k)
 
         return mean_rank, mrr, hits_at_k
-    
-# class ComplEx_with_LinSim_labels(tail_only_ComplEx):
-#   def loss(
-#             self,
-#             head_index: torch.Tensor,
-#             rel_type: torch.Tensor,
-#             tail_index: torch.Tensor,
-#             ) -> torch.Tensor:
-            
-#         '''
-#         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
-#         '''
-
-#         pos = head_index, rel_type, tail_index
-#         neg = self.random_sample(head_index, rel_type, tail_index)
-
-
-#         pos_score = self(*pos)
-#         neg_score = best_lin_sims_for_batch(*neg)
-#         neg_score.to(device)
-#         scores = torch.cat([pos_score, neg_score], dim=0)
-
-#         pos_target = torch.ones_like(pos_score).to(device)
-#         neg_target = torch.zeros_like(neg_score).to(device)
-#         target = torch.cat([pos_target, neg_target], dim=0)
-
-#         return F.binary_cross_entropy_with_logits(scores, target)
 
 class ComplEx_with_LinSim_labels(tail_only_ComplEx):
   def loss(
@@ -383,7 +361,7 @@ class ComplEx_with_LinSim_labels(tail_only_ComplEx):
         neg_target = best_lin_sims_for_batch(*neg).to(device)
 
         target = torch.cat([pos_target, neg_target], dim=0)
-        print(target)
+        # print(neg_target)
 
         return F.binary_cross_entropy_with_logits(scores, target)
 
