@@ -90,10 +90,11 @@ def train_and_test_complex(
                            train_data: torch_geometric.data.data.Data,
                            test_data : torch_geometric.data.data.Data,
                            xp_name:str = '',
+                           run_name: str = '',
                            use_wandb = False,
                            epochs: int = 1000,
                            batch_size: int = 4096,
-                           eval_period = 6,
+                           eval_period = 2,
                            reset_parameters = False,
                            params_save_path = '',
                            device = 'cuda',
@@ -103,6 +104,7 @@ def train_and_test_complex(
     hidden_channels = model.hidden_channels
     print(f"Train and test.\nModel type : {type(model)}\nHidden channels : 6 * {hidden_channels}\nEpochs : {epochs}\nEval period : {eval_period}\nUse WanDB : {use_wandb}")
     print(f"Device : {device}", "Could reach GPU :", torch.Tensor([0,1]).to(device).is_cuda)
+    print(f"Evaluation each {eval_period} epochs.")
     
     
     # ----------------------------------------------- Reset parameters
@@ -131,7 +133,7 @@ def train_and_test_complex(
         wandb.init(
             settings=wandb.Settings(start_method="fork"),
             project=xp_name,
-            
+            name=run_name,
             config={
             "architecture": str(type(model)),
             "dataset": dataset_name,
@@ -331,6 +333,33 @@ class tail_only_ComplEx(ComplEx):
 
         return mean_rank, mrr, hits_at_k
     
+# class ComplEx_with_LinSim_labels(tail_only_ComplEx):
+#   def loss(
+#             self,
+#             head_index: torch.Tensor,
+#             rel_type: torch.Tensor,
+#             tail_index: torch.Tensor,
+#             ) -> torch.Tensor:
+            
+#         '''
+#         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+#         '''
+
+#         pos = head_index, rel_type, tail_index
+#         neg = self.random_sample(head_index, rel_type, tail_index)
+
+
+#         pos_score = self(*pos)
+#         neg_score = best_lin_sims_for_batch(*neg)
+#         neg_score.to(device)
+#         scores = torch.cat([pos_score, neg_score], dim=0)
+
+#         pos_target = torch.ones_like(pos_score).to(device)
+#         neg_target = torch.zeros_like(neg_score).to(device)
+#         target = torch.cat([pos_target, neg_target], dim=0)
+
+#         return F.binary_cross_entropy_with_logits(scores, target)
+
 class ComplEx_with_LinSim_labels(tail_only_ComplEx):
   def loss(
             self,
@@ -347,12 +376,14 @@ class ComplEx_with_LinSim_labels(tail_only_ComplEx):
         neg = self.random_sample(head_index, rel_type, tail_index)
 
         pos_score = self(*pos)
-        neg_score = best_lin_sims_for_batch(*neg)
+        neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
 
-        pos_target = torch.ones_like(pos_score) 
-        neg_target = torch.zeros_like(neg_score)
+        pos_target = torch.ones_like(pos_score)
+        neg_target = best_lin_sims_for_batch(*neg).to(device)
+
         target = torch.cat([pos_target, neg_target], dim=0)
+        print(target)
 
         return F.binary_cross_entropy_with_logits(scores, target)
 
@@ -369,7 +400,6 @@ class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
         '''
 
         pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-
         neg = self.random_sample(head_index, rel_type, tail_index)
 
         pos_score = self(*pos)
@@ -401,7 +431,6 @@ class ComplEx_with_RANDOMISED_LinSim_labels_and_usual_labels(tail_only_ComplEx):
         '''
 
         pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-
         neg = self.random_sample(head_index, rel_type, tail_index)
 
         pos_score = self(*pos)
@@ -434,7 +463,6 @@ class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_
         pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
 
         neg = self.random_sample(head_index, rel_type, tail_index)
-
         pos_score = self(*pos)
         neg_score = self(*neg)
 
