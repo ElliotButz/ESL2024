@@ -445,7 +445,7 @@ class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_
         # I replace this line :
         # lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
         # With :
-        lin_neg_target = torch.rand(size = neg_target.size())
+        lin_neg_target = torch.rand(size = neg_target.size()).to(device)
         neg_target = neg_target.to(device)
 
         target = torch.cat([pos_target, neg_target], dim=0).to(device)
