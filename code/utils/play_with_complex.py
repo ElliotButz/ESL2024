@@ -57,7 +57,7 @@ def train_with_similarity_shrinkage(loader, model, optimizer, lin_term, ontology
 
     return total_loss / total_examples
 
-@torch.no_grad()
+# @torch.no_grad()
 def test(data, model, 
          batch_size,
          device,
@@ -204,7 +204,6 @@ def train_and_test_complex(
 
     return model, train_losses, train_losses
 
-
 def lin_sim_on_mapped_terms(mapped_term1, mapped_term2):
     term1 = map_to_GO[mapped_term1]
     term2 = map_to_GO[mapped_term2]
@@ -245,10 +244,11 @@ def lin_sims_for_batch(term1: torch.Tensor, term2: torch.Tensor)->torch.Tensor:
 
     batch = pd.DataFrame(torch.transpose(torch.stack((term1, term2)),
                                          0,1)
-                        )    
-    return torch.Tensor(batch.apply(lambda row : best_lim_sim_for_triple(head=row[0],
-                                                                         rel=row[1],
-                                                                         tail=row[2]),
+                        )
+    
+    return torch.Tensor(batch.apply(lambda row : lin_sim_on_mapped_terms(mapped_term1=row[0],
+                                                                         mapped_term2=row[1],
+                                                                         ),
                                     axis=1))
 
 def shuffle_tensor(t: torch.Tensor):
@@ -261,6 +261,24 @@ def shuffle_tensor(t: torch.Tensor):
     '''
     idx = torch.randperm(t.shape[0])
     return t[idx].view(t.size())
+
+class Random_ComplEx(ComplEx):
+    def loss(
+        self,
+        head_index,
+        rel_type,
+        tail_index,
+    ):
+
+        pos_score = self(head_index, rel_type, tail_index)
+        neg_score = self(*self.random_sample(head_index, rel_type, tail_index))
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        neg_target = torch.zeros_like(neg_score)
+        target = shuffle_tensor(torch.cat([pos_target, neg_target], dim=0))
+
+        return F.binary_cross_entropy_with_logits(scores, target)
 
 class tail_only_ComplEx(ComplEx):
 
@@ -338,7 +356,7 @@ class tail_only_ComplEx(ComplEx):
 
         return mean_rank, mrr, hits_at_k
 
-class ComplEx_with_LinSim_labels(tail_only_ComplEx):
+class ComplEx_L_labels(tail_only_ComplEx):
   def loss(
             self,
             head_index: torch.Tensor,
@@ -358,6 +376,60 @@ class ComplEx_with_LinSim_labels(tail_only_ComplEx):
         scores = torch.cat([pos_score, neg_score], dim=0)
 
         pos_target = torch.ones_like(pos_score)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+
+        target = torch.cat([pos_target, lin_neg_target], dim=0)
+        # print(neg_target)
+
+        return F.binary_cross_entropy_with_logits(scores, target)
+  
+class ComplEx_FRL_labels(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        I randomised the full target tensor. The model should not learn.
+        '''
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+        target = torch.cat([pos_target, lin_neg_target], dim=0)
+        target = shuffle_tensor(target)
+
+        return F.binary_cross_entropy_with_logits(scores, target)
+
+class ComplEx_BLS_labels(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a best linSim instead of label 0 on false tails.
+        '''
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
         neg_target = best_lin_sims_for_batch(*neg).to(device)
 
         target = torch.cat([pos_target, neg_target], dim=0)
@@ -365,7 +437,7 @@ class ComplEx_with_LinSim_labels(tail_only_ComplEx):
 
         return F.binary_cross_entropy_with_logits(scores, target)
 
-class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
+class ComplEx_BLS_U_labels(tail_only_ComplEx):
   
   def loss(self,
             head_index: torch.Tensor,
@@ -395,7 +467,7 @@ class ComplEx_with_LinSim_labels_and_usual_labels(tail_only_ComplEx):
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
 
-class ComplEx_with_RANDOMISED_LinSim_labels_and_usual_labels(tail_only_ComplEx):
+class ComplEx_RBLS_U_labels(tail_only_ComplEx):
   
   def loss(self,
             head_index: torch.Tensor,
@@ -424,9 +496,114 @@ class ComplEx_with_RANDOMISED_LinSim_labels_and_usual_labels(tail_only_ComplEx):
         target = torch.cat([pos_target, neg_target], dim=0).to(device)
         lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
 
-        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target)
+  
+class ComplEx_FRBLS_U_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        not-usual labels are shuffled.
+        '''
 
-class ComplEx_with_normal_noise_and_usual_labels(ComplEx_with_LinSim_labels_and_usual_labels):
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = shuffle_tensor(best_lin_sims_for_batch(*neg)).to(device)
+        neg_target = neg_target.to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+        lin_target = shuffle_tensor(lin_target)
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target)
+
+class ComplEx_BLS_RBLS_U_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified usal labels, LinSim labels and randomised LinSin labels
+        '''
+
+        # Making + and - triples
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        # Model predictions
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        # Making Targets
+        # + :
+        pos_target = torch.ones_like(pos_score).to(device)
+        # - :
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+        rand_lin_neg_target = shuffle_tensor(lin_neg_target.detach().clone()).to(device)
+        neg_target = neg_target.to(device)
+        # concat(+,-)
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+        rand_lin_target = torch.cat([pos_target, rand_lin_neg_target], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) + F.binary_cross_entropy_with_logits(scores, rand_lin_target)
+
+class ComplEx_2BRLS_U_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have 2 terms on randomized Best LinSim labels.
+        '''
+
+        # Making + and - triples
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        # Model predictions
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        # Making Targets
+        # + :
+        pos_target = torch.ones_like(pos_score).to(device)
+        # - :
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+        rand_lin_neg_target1 = shuffle_tensor(lin_neg_target.detach().clone()).to(device)
+        rand_lin_neg_target2 = shuffle_tensor(lin_neg_target.detach().clone()).to(device)
+
+        neg_target = neg_target.to(device)
+        # concat(+,-)
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        rand_lin_target1 = torch.cat([pos_target, rand_lin_neg_target1], dim=0).to(device)
+        rand_lin_target2 = torch.cat([pos_target, rand_lin_neg_target2], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, rand_lin_target1) + F.binary_cross_entropy_with_logits(scores, rand_lin_target2)
+
+class ComplEx_with_normal_noise_and_usual_labels(ComplEx_BLS_U_labels):
   
   def loss(self,
             head_index: torch.Tensor,
@@ -499,6 +676,7 @@ class LinSim_ComplEx(tail_only_ComplEx):
             ) -> torch.Tensor:
             
         '''
+        DEPRECATED : non-derivable additionnal loss term.
         tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
         '''
 
@@ -534,6 +712,7 @@ class LinSim_Only_ComplEx(tail_only_ComplEx):
             ) -> torch.Tensor:
             
         '''
+        DEPRECATED : non-derivable additionnal loss term.
         tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
         '''
 
