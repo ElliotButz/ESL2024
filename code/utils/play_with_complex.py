@@ -1,3 +1,4 @@
+
 import pandas as pd
 import torch
 import torch_geometric
@@ -8,6 +9,7 @@ import nxontology as nxo
 import copy
 import wandb
 import tqdm
+
 
 def train(loader, model, optimizer, device):
     model.train()
@@ -282,6 +284,25 @@ class Random_ComplEx(ComplEx):
 
 class tail_only_ComplEx(ComplEx):
 
+    def __init__(
+        self,
+        num_nodes: int,
+        num_relations: int,
+        hidden_channels: int,
+        sparse: bool = False,
+        additionnal_negative_per_positive = 0
+    ):
+        super().__init__()
+
+        self.num_nodes = num_nodes
+        self.num_relations = num_relations
+        self.hidden_channels = hidden_channels
+
+        self.node_emb = torch.nn.Embedding(num_nodes, hidden_channels, sparse=sparse)
+        self.rel_emb = torch.nn.Embedding(num_relations, hidden_channels, sparse=sparse)
+
+        self.additionnal_negative_per_positive = additionnal_negative_per_positive
+
     '''
     Overwritting random_sample() to make negative triples by setting a random tail to each triple,
     instead of setting a random head or tail.
@@ -356,6 +377,16 @@ class tail_only_ComplEx(ComplEx):
 
         return mean_rank, mrr, hits_at_k
 
+
+    def make_pos_and_neg(self, head_index, rel_type, tail_index):
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+        for i in range(0,self.add_neg_per_pos):
+                add_neg = self.random_sample(head_index, rel_type, tail_index)
+                neg = torch.cat([neg, add_neg], dim=0)
+        return pos, neg
+    
 class ComplEx_L_labels(tail_only_ComplEx):
   def loss(
             self,
@@ -409,6 +440,33 @@ class ComplEx_FRL_labels(tail_only_ComplEx):
         target = shuffle_tensor(target)
 
         return F.binary_cross_entropy_with_logits(scores, target)
+  
+class ComplEx_GN_labels(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        I randomised the full target tensor. The model should not learn.
+        '''
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+        target = torch.cat([pos_target, lin_neg_target], dim=0)
+        gn_target = torch.randn(size = scores.size()).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, gn_target)
 
 class ComplEx_BLS_labels(tail_only_ComplEx):
   def loss(
@@ -434,6 +492,38 @@ class ComplEx_BLS_labels(tail_only_ComplEx):
 
         target = torch.cat([pos_target, neg_target], dim=0)
         # print(neg_target)
+
+        return F.binary_cross_entropy_with_logits(scores, target)
+  
+class ComplEx_BLS_labels_more_neg(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a best linSim instead of label 0 on false tails.
+        One add negatives. Should be used after e.g.:
+        import play_wit_complex as pwc
+        pwc.add_neg_per_pos = 10
+        '''
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+        for i in range(0,self.add_neg_per_pos):
+            add_neg = self.random_sample(head_index, rel_type, tail_index)
+            neg = torch.cat([neg, add_neg], dim=0)
+            
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        neg_target = best_lin_sims_for_batch(*neg).to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0)
 
         return F.binary_cross_entropy_with_logits(scores, target)
 
