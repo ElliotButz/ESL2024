@@ -40,20 +40,18 @@ def random_sample(
 
     return head_index, rel_type, tail_index
 
-def make_pos_and_neg(head_index, rel_type, tail_index, add_neg_for_pos=1):
+def make_pos_and_neg(head_index, rel_type, tail_index, neg_for_pos=1):
     pos = head_index, rel_type, tail_index
     neg = list(random_sample(*pos))
 
     for i in range(3):
-        neg[i] = torch.cat([pos[i].clone().detach()]*add_neg_for_pos)
+        neg[i] = torch.cat([pos[i].clone().detach()]*neg_for_pos)
 
     neg[2] = shuffle_tensor(neg[2])
-
-    print('added additional negatives!')
     
     return tuple(pos), tuple(neg)
 
-def train_model(model_name:str, hidden_channels_list: list,  epochs:int, eval_period:int, 
+def train_model(model_name:str, hidden_channels_list: list,  epochs:int, eval_period:int, negative_per_positive: int,
                 device:str,
                 use_wandb:bool, xp_name :str,
                 test_set:torch_geometric.data.data.Data,train_set: torch_geometric.data.data.Data,
@@ -68,6 +66,7 @@ def train_model(model_name:str, hidden_channels_list: list,  epochs:int, eval_pe
             num_nodes       = train_set.num_nodes,
             num_relations   = train_set.edge_index.size()[1],
             hidden_channels = hidden_channels,
+            negative_per_positive = negative_per_positive
         ).to(device)
 
         train_and_test_complex(
@@ -198,7 +197,8 @@ def train_and_test_complex(model,
             "dataset": dataset_name,
             "epochs": epochs,
             'hidden_channels' : hidden_channels,
-            'batch_size' : batch_size
+            'batch_size' : batch_size,
+            'negative_per_positive' : model.neg_for_pos
             }
         )
 
@@ -321,7 +321,7 @@ class ComplEx(ComplEx):
         num_relations: int,
         hidden_channels: int,
         sparse: bool = False,
-        additionnal_negative_per_positive = 1
+        negative_per_positive = 1
                 ):
         super().__init__(num_nodes, num_relations, hidden_channels)
 
@@ -331,7 +331,7 @@ class ComplEx(ComplEx):
 
         self.node_emb = torch.nn.Embedding(num_nodes, hidden_channels, sparse=sparse)
         self.rel_emb = torch.nn.Embedding(num_relations, hidden_channels, sparse=sparse)
-        self.add_neg_per_pos = additionnal_negative_per_positive
+        self.neg_for_pos = negative_per_positive
 
 class Random_ComplEx(ComplEx):
     def loss(
@@ -437,14 +437,9 @@ class tail_only_ComplEx(ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        # pos, neg = self.make_pos_and_neg(head_index=head_index,
-        #                                  rel_type=rel_type,
-        #                                  tail_index=tail_index)
-        
-        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,self.add_neg_for_pos)
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,self.neg_for_pos)
 
 
-        make_pos_and_neg
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -453,8 +448,6 @@ class tail_only_ComplEx(ComplEx):
         neg_target = torch.zeros_like(neg_score)
 
         target = torch.cat([pos_target, neg_target], dim=0)
-        # print(neg_target.size())
-
 
         return F.binary_cross_entropy_with_logits(scores, target)
     
@@ -471,8 +464,9 @@ class ComplEx_L_labels(tail_only_ComplEx):
         Gaussian noise addition to labels.
         '''
 
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
 
         pos_score = self(*pos)
         neg_score = self(*neg)
@@ -499,9 +493,9 @@ class ComplEx_L_FRL_labels(tail_only_ComplEx):
         Lin noise addition.
         '''
 
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -524,9 +518,9 @@ class ComplEx_LGN_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         Gaussian noise addition to labels.
         '''
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -556,9 +550,9 @@ class ComplEx_FRL_labels(tail_only_ComplEx):
         I randomised the full target tensor. The model should not learn.
         '''
 
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -583,9 +577,9 @@ class ComplEx_GN_labels(tail_only_ComplEx):
         I randomised the full target tensor. The model should not learn.
         '''
 
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -636,12 +630,13 @@ class ComplEx_BLS_labels_more_neg(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a best linSim instead of label 0 on false tails.
         One add negatives. Should be used after e.g.:
         import play_wit_complex as pwc
-        pwc.add_neg_per_pos = 10
+        pwfor = 10
         '''
 
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-        for i in range(0,self.add_neg_per_pos):
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
+        for i in range(0,selfor):
             add_neg = self.random_sample(head_index, rel_type, tail_index)
             neg = torch.cat([neg, add_neg], dim=0)
             
@@ -668,9 +663,9 @@ class ComplEx_BLS_U_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -698,9 +693,9 @@ class ComplEx_UBLS_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -729,9 +724,9 @@ class ComplEx_GN_U_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -759,9 +754,9 @@ class ComplEx_UGN_labels(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -790,9 +785,9 @@ class ComplEx_RBLS_U_labels(tail_only_ComplEx):
         not-1 labels are shuffled.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -821,9 +816,9 @@ class ComplEx_FRBLS_U_labels(tail_only_ComplEx):
         not-usual labels are shuffled.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -851,9 +846,9 @@ class ComplEx_FRL_U_labels(tail_only_ComplEx):
         not-usual labels are shuffled.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -881,9 +876,9 @@ class ComplEx_FRBLS_L_labels(tail_only_ComplEx):
         not-usual labels are shuffled.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -911,9 +906,9 @@ class ComplEx_BLS_RBLS_U_labels(tail_only_ComplEx):
         '''
 
         # Making + and - triples
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         # Model predictions
         pos_score = self(*pos)
         neg_score = self(*neg)
@@ -947,9 +942,9 @@ class ComplEx_2BRLS_U_labels(tail_only_ComplEx):
         '''
 
         # Making + and - triples
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-        neg = self.random_sample(head_index, rel_type, tail_index)
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         # Model predictions
         pos_score = self(*pos)
         neg_score = self(*neg)
@@ -984,9 +979,10 @@ class ComplEx_with_normal_noise_and_usual_labels(ComplEx_BLS_U_labels):
         ComplEx_with_LinSim_labels_and_usual_loss.loss() modified to have a normal(0,1) noise instead of Lin labels.
         '''
 
-        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
-
-        neg = self.random_sample(head_index, rel_type, tail_index)
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
+        
         pos_score = self(*pos)
         neg_score = self(*neg)
 
@@ -1018,10 +1014,9 @@ class best_LinSim_ComplEx(tail_only_ComplEx):
         one withdraw the mean(bests similarities between each false tail of a triple to its possible tails) to the loss.
         '''
 
-        pos = head_index, rel_type, tail_index
-
-        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
-        neg = false_head_index, false_rel_type, false_tail_index
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
 
         pos_score = self(*pos)
         neg_score = self(*neg)
@@ -1049,11 +1044,9 @@ class LinSim_ComplEx(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
         '''
 
-        pos = head_index, rel_type, tail_index
-
-        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
-        neg = false_head_index, false_rel_type, false_tail_index
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
@@ -1085,11 +1078,9 @@ class LinSim_Only_ComplEx(tail_only_ComplEx):
         tail_only_ComplEx.loss() modified to account a LinSim term : one simply withdraw mean(similarities(batch)) to the loss.
         '''
 
-        pos = head_index, rel_type, tail_index
-
-        false_head_index, false_rel_type, false_tail_index = self.random_sample(head_index, rel_type, tail_index)
-        neg = false_head_index, false_rel_type, false_tail_index
-
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,
+                                     self.neg_for_pos
+                                     )
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
