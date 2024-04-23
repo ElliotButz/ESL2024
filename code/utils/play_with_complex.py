@@ -10,6 +10,48 @@ import nxontology as nxo
 import copy
 import wandb
 
+device = 'cpu'
+def shuffle_tensor(t: torch.Tensor):
+    '''
+    Shuffles elements of a tensor.
+    WARNING :
+    shuffle_tensor(torch.tensor([[0,1,2,3,4,5],[6,7,8,9,0,1]])) returns :
+    tensor([[0, 1, 2, 3, 4, 5],  OR tensor([[6, 7, 8, 9, 0, 1],
+            [6, 7, 8, 9, 0, 1]])            [0, 1, 2, 3, 4, 5]])
+    '''
+    idx = torch.randperm(t.shape[0])
+    return t[idx].view(t.size())
+
+def random_sample(
+    head_index: torch.Tensor,
+    rel_type: torch.Tensor,
+    tail_index: torch.Tensor,
+    ):
+
+    """
+    Randomly samples negative triplets by replacing the tail.
+    Args:
+    head_index (torch.Tensor): The head indices.
+    rel_type (torch.Tensor): The relation type.
+    tail_index (torch.Tensor): The tail indices.
+    """
+
+    tail_index = shuffle_tensor(tail_index.clone()).to(device)
+
+    return head_index, rel_type, tail_index
+
+def make_pos_and_neg(head_index, rel_type, tail_index, add_neg_for_pos=1):
+    pos = head_index, rel_type, tail_index
+    neg = list(random_sample(*pos))
+
+    for i in range(3):
+        neg[i] = torch.cat([pos[i].clone().detach()]*add_neg_for_pos)
+
+    neg[2] = shuffle_tensor(neg[2])
+
+    print('added additional negatives!')
+    
+    return tuple(pos), tuple(neg)
 
 def train_model(model_name:str, hidden_channels_list: list,  epochs:int, eval_period:int, 
                 device:str,
@@ -272,17 +314,6 @@ def lin_sims_for_batch(term1: torch.Tensor, term2: torch.Tensor)->torch.Tensor:
                                                                          ),
                                     axis=1))
 
-def shuffle_tensor(t: torch.Tensor):
-    '''
-    Shuffles elements of a tensor.
-    WARNING :
-    shuffle_tensor(torch.tensor([[0,1,2,3,4,5],[6,7,8,9,0,1]])) returns :
-    tensor([[0, 1, 2, 3, 4, 5],  OR tensor([[6, 7, 8, 9, 0, 1],
-            [6, 7, 8, 9, 0, 1]])            [0, 1, 2, 3, 4, 5]])
-    '''
-    idx = torch.randperm(t.shape[0])
-    return t[idx].view(t.size())
-
 class ComplEx(ComplEx):
     def __init__(
         self,
@@ -290,7 +321,7 @@ class ComplEx(ComplEx):
         num_relations: int,
         hidden_channels: int,
         sparse: bool = False,
-        additionnal_negative_per_positive = 0
+        additionnal_negative_per_positive = 1
                 ):
         super().__init__(num_nodes, num_relations, hidden_channels)
 
@@ -301,16 +332,6 @@ class ComplEx(ComplEx):
         self.node_emb = torch.nn.Embedding(num_nodes, hidden_channels, sparse=sparse)
         self.rel_emb = torch.nn.Embedding(num_relations, hidden_channels, sparse=sparse)
         self.add_neg_per_pos = additionnal_negative_per_positive
-
-    def make_pos_and_neg(self, head_index, rel_type, tail_index):
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-        for i in range(0,self.add_neg_per_pos):
-                add_neg = self.random_sample(head_index, rel_type, tail_index)[3]
-                print('aaan',add_neg[2])
-                neg = torch.cat([neg,add_neg], dim=1)
-                print('added additional negatives !')
-        return pos, neg
 
 class Random_ComplEx(ComplEx):
     def loss(
@@ -342,26 +363,6 @@ class tail_only_ComplEx(ComplEx):
 
     '''
 
-    @torch.no_grad()
-    def random_sample(
-        self,
-        head_index: torch.Tensor,
-        rel_type: torch.Tensor,
-        tail_index: torch.Tensor,
-        ):
-
-        """
-        Randomly samples negative triplets by replacing the tail.
-        Args:
-            head_index (torch.Tensor): The head indices.
-            rel_type (torch.Tensor): The relation type.
-            tail_index (torch.Tensor): The tail indices.
-        """
-
-        tail_index = shuffle_tensor(tail_index.clone()).to(device)
-
-        return head_index, rel_type, tail_index
-    
     @torch.no_grad()
     def test(
         self,
@@ -440,9 +441,10 @@ class tail_only_ComplEx(ComplEx):
         #                                  rel_type=rel_type,
         #                                  tail_index=tail_index)
         
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
+        pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,self.add_neg_for_pos)
 
+
+        make_pos_and_neg
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
