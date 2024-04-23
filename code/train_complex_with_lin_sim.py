@@ -11,7 +11,6 @@ import sys
 sys.path.append( '/home/ebutz/ESL2024/code/utils' )
 import play_with_complex as pwc
 
-
 import torch
 import torch.optim as optim
 import torch_geometric
@@ -20,7 +19,6 @@ from torch_geometric.data import Data
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.loader import DataLoader
 import torch.nn.functional as F
-
 
 from nxontology.imports import from_file
 
@@ -33,8 +31,8 @@ altails_dict_path = '/home/ebutz/ESL2024/data/Os_to_GO_iric/DICT_altailed_Os_to_
 # Model to train :
 hidden_channels = 176
 batch_size      = 4096
-epochs          = 200
-eval_period     = 2
+epochs          = 1000
+eval_period     = 4
 lin_factor      = 1
 
 use_wandb  = True
@@ -124,124 +122,45 @@ pwc.mapped_alt_tails = mapped_alt_tails
 pwc.device           = device
 
 
+epochs = 1500
+eval_period = 5
+use_wandb = True
+
 # ------------- Init model ------------- #
 
-for hidden_channels in [15, 50, 75, 150, 176, 250, 350]:
+for hidden_channels in [250, 15, 75, 15, 176, 250, 350]:
+    xp_name = f"Lin VS Baseline with {hidden_channels}*6 HC on {epochs} epochs"
 
-    xp_name = f'Lin + noise + usual labels vs others on full Os_to_GO dataset with 6*{hidden_channels} HC'
-
-    tail_only = pwc.tail_only_ComplEx(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = tail_only,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Baseline (Usual ComplEx tail only)',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
+    pwc.train_model(model_name='tail_only_ComplEx', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
     
-    BLS_RBLS_U = pwc.ComplEx_BLS_RBLS_U_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = BLS_RBLS_U,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Usual_BLS_and_random_BLS_labels',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
+    pwc.train_model(model_name='ComplEx_L_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
     
-    RBLS2_U = pwc.ComplEx_2BRLS_U_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = RBLS2_U,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Usual_and_2_random_BLS_labels',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
-
-    LS_labels = pwc.ComplEx_L_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = LS_labels,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Simples LinSim labels',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
+    pwc.train_model(model_name='ComplEx_L_FRL_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
     
-    BLS_labels = pwc.ComplEx_BLS_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = BLS_labels,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Best LinSim labels',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
+    pwc.train_model(model_name='ComplEx_FRL_U_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
 
-    usual_and_LinSim_labels = pwc.ComplEx_BLS_U_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = usual_and_LinSim_labels,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'Usual and BLS labels',
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
-
-    usual_labels_and_gaussian_noise_labels = pwc.ComplEx_with_normal_noise_and_usual_labels(
-                                    num_nodes       = train_set.num_nodes,
-                                    num_relations   = train_set.edge_index.size()[1],
-                                    hidden_channels = hidden_channels,
-                                    ).to(device)
-    pwc.train_and_test_complex(model      = usual_labels_and_gaussian_noise_labels,
-                            train_data = train_set,
-                            test_data  = test_set,
-                            device     = device,
-                            use_wandb  = use_wandb,
-                            xp_name    = xp_name,
-                            run_name   = 'loss_on_usual_labels_and_gaussian_noise_labels' ,
-                            eval_period= eval_period,
-                            epochs = epochs
-                            )
-
+    pwc.train_model(model_name='ComplEx_UGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
+    
+    pwc.train_model(model_name='ComplEx_LGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
+                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                train_set=train_set, test_set=test_set,
+                file_import = pwc)
+    
 
 print('Finished !')
 

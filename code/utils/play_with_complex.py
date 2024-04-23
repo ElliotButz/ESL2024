@@ -10,6 +10,36 @@ import nxontology as nxo
 import copy
 import wandb
 
+
+def train_model(model_name:str, hidden_channels_list: list,  epochs:int, eval_period:int, 
+                device:str,
+                use_wandb:bool, xp_name :str,
+                test_set:torch_geometric.data.data.Data,train_set: torch_geometric.data.data.Data,
+                file_import : str):
+    
+    for hidden_channels in hidden_channels_list :
+        xp_name = f"Lin VS Baseline with {hidden_channels}*6 HC on {epochs} epochs"
+
+        model_class = getattr(file_import, model_name)
+
+        model = model_class(
+            num_nodes       = train_set.num_nodes,
+            num_relations   = train_set.edge_index.size()[1],
+            hidden_channels = hidden_channels,
+        ).to(device)
+
+        train_and_test_complex(
+            model       = model,
+            train_data  = train_set,
+            test_data   = test_set,
+            device      = device,
+            use_wandb   = use_wandb,
+            xp_name     = xp_name,
+            run_name    = model_name,
+            eval_period = eval_period,
+            epochs      = epochs
+        )
+
 def train(loader, model, optimizer, device):
     model.train()
     total_loss = total_examples = 0
@@ -72,8 +102,7 @@ def get_test_loss(loader, model, device):
 
     return total_loss / total_examples
 
-def train_and_test_complex(
-                           model,
+def train_and_test_complex(model,
                            train_data: torch_geometric.data.data.Data,
                            test_data : torch_geometric.data.data.Data,
                            xp_name:str = '',
@@ -135,7 +164,7 @@ def train_and_test_complex(
 
     torch.set_grad_enabled(True)
     model.to(device)
-
+    print(f'Model on {device}.')
     train_losses = []
     test_losses = []
     for epoch in range(0, epochs+1):
@@ -165,12 +194,12 @@ def train_and_test_complex(
                 print('batch :',batch)
                 rank, mrr, hits = model.test(*batch, k=k)
                 # rank, mrr, hits = test(test_data, model=model, device=device, batch_size=batch_size)
-                print(f'Epoch: {epoch:03d}/{epochs}, Val Mean Rank: {rank:.2f}', f'Val MRR: {mrr:.4f}, Val Hits@10: {hits:.4f}')
+                print(f'Epoch: {epoch:03d}/{epochs}, Val Mean Rank: {rank:.2f}', f'Val MRR: {mrr:.4f}, Val Hits@{k}: {hits:.4f}')
 
         if use_wandb and epoch%eval_period == 0:
             wandb.log({"Val Mean Rank" : rank,
                                "Val MRR"       : mrr,
-                               "hits@10"       : hits,
+                               f"hits@{k}"       : hits,
                                "loss"          : loss,
                                "loss on test"  : test_loss})
             
@@ -254,6 +283,35 @@ def shuffle_tensor(t: torch.Tensor):
     idx = torch.randperm(t.shape[0])
     return t[idx].view(t.size())
 
+class ComplEx(ComplEx):
+    def __init__(
+        self,
+        num_nodes: int,
+        num_relations: int,
+        hidden_channels: int,
+        sparse: bool = False,
+        additionnal_negative_per_positive = 0
+                ):
+        super().__init__(num_nodes, num_relations, hidden_channels)
+
+        self.num_nodes = num_nodes
+        self.num_relations = num_relations
+        self.hidden_channels = hidden_channels
+
+        self.node_emb = torch.nn.Embedding(num_nodes, hidden_channels, sparse=sparse)
+        self.rel_emb = torch.nn.Embedding(num_relations, hidden_channels, sparse=sparse)
+        self.add_neg_per_pos = additionnal_negative_per_positive
+
+    def make_pos_and_neg(self, head_index, rel_type, tail_index):
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+        for i in range(0,self.add_neg_per_pos):
+                add_neg = self.random_sample(head_index, rel_type, tail_index)[3]
+                print('aaan',add_neg[2])
+                neg = torch.cat([neg,add_neg], dim=1)
+                print('added additional negatives !')
+        return pos, neg
+
 class Random_ComplEx(ComplEx):
     def loss(
         self,
@@ -284,24 +342,6 @@ class tail_only_ComplEx(ComplEx):
 
     '''
 
-    # def __init__(
-    #     self,
-    #     num_nodes: int,
-    #     num_relations: int,
-    #     hidden_channels: int,
-    #     sparse: bool = False,
-    #     additionnal_negative_per_positive = 0
-    #             ):
-    #     super().__init__(num_nodes, num_relations, hidden_channels)
-
-    #     self.num_nodes = num_nodes
-    #     self.num_relations = num_relations
-    #     self.hidden_channels = hidden_channels
-
-    #     self.node_emb = torch.nn.Embedding(num_nodes, hidden_channels, sparse=sparse)
-    #     self.rel_emb = torch.nn.Embedding(num_relations, hidden_channels, sparse=sparse)
-    #     self.additionnal_negative_per_positive = additionnal_negative_per_positive
-
     @torch.no_grad()
     def random_sample(
         self,
@@ -318,7 +358,7 @@ class tail_only_ComplEx(ComplEx):
             tail_index (torch.Tensor): The tail indices.
         """
 
-        tail_index = shuffle_tensor(tail_index.clone())
+        tail_index = shuffle_tensor(tail_index.clone()).to(device)
 
         return head_index, rel_type, tail_index
     
@@ -360,11 +400,14 @@ class tail_only_ComplEx(ComplEx):
 
             # Select the index of 999 false tails :
             tail_indices = random.sample(tails, 999)
-            # Add the true tail :
+            # Add the true tail's index :
             tail_indices.append(i)
             # Score each triple (h, r, false_t) :
-            ts = torch.tensor(tail_indices)
-            scores = self(h.expand_as(ts).to(device), r.expand_as(ts).to(device), ts.to(device))
+            ts = torch.tensor(tail_indices).to(device)
+            rels = r.expand_as(ts).to(device)
+            heads = h.expand_as(ts).to(device)
+            self.to(device)
+            scores = self(heads, rels, ts)
             # Sort the scores and find the rank of the true triplet score
             sorted_indices = torch.argsort(scores, descending=True)
             rank = (sorted_indices == 999).nonzero().item()
@@ -393,30 +436,25 @@ class tail_only_ComplEx(ComplEx):
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
         '''
 
-        pos, neg = self.make_pos_and_neg(head_index=head_index,
-                                         rel_type=rel_type,
-                                         tail_index=tail_index)
+        # pos, neg = self.make_pos_and_neg(head_index=head_index,
+        #                                  rel_type=rel_type,
+        #                                  tail_index=tail_index)
+        
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
 
         pos_score = self(*pos)
         neg_score = self(*neg)
         scores = torch.cat([pos_score, neg_score], dim=0)
-        print('hey')
+
         pos_target = torch.ones_like(pos_score)
         neg_target = torch.zeros_like(neg_score)
 
         target = torch.cat([pos_target, neg_target], dim=0)
-        # print(neg_target)
+        # print(neg_target.size())
+
 
         return F.binary_cross_entropy_with_logits(scores, target)
-
-    def make_pos_and_neg(self, head_index, rel_type, tail_index):
-
-        pos = head_index, rel_type, tail_index
-        neg = self.random_sample(head_index, rel_type, tail_index)
-        for i in range(0,self.add_neg_per_pos):
-                add_neg = self.random_sample(head_index, rel_type, tail_index)
-                neg = torch.cat([neg, add_neg], dim=0)
-        return pos, neg
     
 class ComplEx_L_labels(tail_only_ComplEx):
   def loss(
@@ -428,6 +466,7 @@ class ComplEx_L_labels(tail_only_ComplEx):
             
         '''
         tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        Gaussian noise addition to labels.
         '''
 
         pos = head_index, rel_type, tail_index
@@ -441,11 +480,68 @@ class ComplEx_L_labels(tail_only_ComplEx):
         lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
 
         target = torch.cat([pos_target, lin_neg_target], dim=0)
-        # print(neg_target)
+        target = target
 
         return F.binary_cross_entropy_with_logits(scores, target)
-  
+
+class ComplEx_L_FRL_labels(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        Lin noise addition.
+        '''
+
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+
+        target = torch.cat([pos_target, lin_neg_target], dim=0)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, shuffle_tensor(target))
+    
+class ComplEx_LGN_labels(tail_only_ComplEx):
+  def loss(
+            self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        Gaussian noise addition to labels.
+        '''
+        pos = head_index, rel_type, tail_index
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+        scores = torch.cat([pos_score, neg_score], dim=0)
+
+        pos_target = torch.ones_like(pos_score)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+
+        gn_target = torch.randn(size = scores.size()).to(device)
+        target = torch.cat([pos_target, lin_neg_target], dim=0)
+        print(target[0])
+        target = target + gn_target
+        print(target[0])
+        print(target.size(),target)
+        return F.binary_cross_entropy_with_logits(scores, target)
+
 class ComplEx_FRL_labels(tail_only_ComplEx):
+  
   def loss(
             self,
             head_index: torch.Tensor,
@@ -588,6 +684,37 @@ class ComplEx_BLS_U_labels(tail_only_ComplEx):
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, lin_target) 
 
+class ComplEx_UBLS_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        '''
+
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+        neg_target = neg_target.to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+        target = target + lin_target
+
+        return F.binary_cross_entropy_with_logits(scores, target)
+
 class ComplEx_GN_U_labels(tail_only_ComplEx):
   
   def loss(self,
@@ -614,8 +741,39 @@ class ComplEx_GN_U_labels(tail_only_ComplEx):
 
         target = torch.cat([pos_target, neg_target], dim=0).to(device)
         gn_target = torch.randn(size = scores.size()).to(device)
+        print("usual",F.binary_cross_entropy_with_logits(scores, target))
+        print("gn   ",F.binary_cross_entropy_with_logits(scores, gn_target))
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, gn_target)
+  
+class ComplEx_UGN_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        '''
 
-        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, gn_target) 
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to('cpu')
+        neg_target = neg_target.to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        gn_target = torch.randn(size = scores.size()).to(device)
+        target = target + gn_target
+
+        return F.binary_cross_entropy_with_logits(scores, target) 
 
 class ComplEx_RBLS_U_labels(tail_only_ComplEx):
   
@@ -677,6 +835,66 @@ class ComplEx_FRBLS_U_labels(tail_only_ComplEx):
         lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
 
         return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, shuffle_tensor(lin_target))
+  
+class ComplEx_FRL_U_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        not-usual labels are shuffled.
+        '''
+
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to(device)
+        lin_neg_target = lin_sims_for_batch(pos[2].to('cpu'), neg[2].to('cpu')).to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, target) + F.binary_cross_entropy_with_logits(scores, shuffle_tensor(lin_target))
+
+class ComplEx_FRBLS_L_labels(tail_only_ComplEx):
+  
+  def loss(self,
+            head_index: torch.Tensor,
+            rel_type: torch.Tensor,
+            tail_index: torch.Tensor,
+            ) -> torch.Tensor:
+            
+        '''
+        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
+        not-usual labels are shuffled.
+        '''
+
+        pos = head_index.to(device), rel_type.to(device), tail_index.to(device)
+        neg = self.random_sample(head_index, rel_type, tail_index)
+
+        pos_score = self(*pos)
+        neg_score = self(*neg)
+
+        scores = torch.cat([pos_score, neg_score], dim=0).to(device)
+
+        pos_target = torch.ones_like(pos_score).to(device)
+        neg_target = torch.zeros_like(neg_score).to(device)
+        lin_neg_target = best_lin_sims_for_batch(*neg).to(device)
+
+        target = torch.cat([pos_target, neg_target], dim=0).to(device)
+        lin_target = torch.cat([pos_target, lin_neg_target], dim=0).to(device)
+
+        return F.binary_cross_entropy_with_logits(scores, lin_target) + F.binary_cross_entropy_with_logits(scores, shuffle_tensor(lin_target))
 
 class ComplEx_BLS_RBLS_U_labels(tail_only_ComplEx):
   
