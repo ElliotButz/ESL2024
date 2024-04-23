@@ -1,6 +1,6 @@
 from enum import Enum
-    
-class Gene(Enum):
+
+class IricGene(Enum):
     type = [
         'gene ontology',
         'panther',
@@ -52,7 +52,7 @@ class Gene(Enum):
         'explanation'
     ]
 
-class GO(Enum):
+class IricGO(Enum):
     type = [
         'is_a',
         'namespace',
@@ -66,7 +66,7 @@ class GO(Enum):
         'name'
     ]
 
-class PO(Enum):
+class IricPO(Enum):
     type = [
         'is_a',
         'namespace',
@@ -80,7 +80,7 @@ class PO(Enum):
         'name'
     ]
 
-class TO(Enum):
+class IricTO(Enum):
     # TO lacks a namespace
     type = [
         'is_a',
@@ -93,32 +93,32 @@ class TO(Enum):
         'name'
     ]
 
-class PrositeProfiles(Enum):
+class IricPrositeProfiles(Enum):
     type = [
         "prosite_profiles"
     ]
 
-class PrositePatterns(Enum):
+class IricPrositePatterns(Enum):
     type = [
         "prosite_patterns"
     ]
 
-class SuperFamily(Enum):
+class IricSuperFamily(Enum):
     type = [
         "superfamily"
     ]
 
-class Prints(Enum):
+class IricPrints(Enum):
     type = [
         "prints"
     ]
 
-class Panther(Enum):
+class IricPanther(Enum):
     type = [
         "panther"
     ]
 
-class Node(Enum):
+class IricNode(Enum):
     links = [
         'gene ontology',
         'panther',
@@ -132,4 +132,119 @@ class Node(Enum):
         'is_a',
     ]
 
-    features = Gene.features.value + GO.features.value + PO.features.value + TO.features.value
+    features = IricGene.features.value + IricGO.features.value + IricPO.features.value + IricTO.features.value
+
+### Arabidopsis thaliana    
+class AthalianaGene(Enum):
+    type = [
+        'interpro',
+        'description',
+        'end',
+        'start',
+        'seq_region_name',
+        'po',
+        'strand',
+        'biotype',
+        'full_name',
+        'curator_summary',
+        'go:term',
+        'synonym',
+        'protein_sequence',
+        'genomic_sequence',
+    ]
+
+    features = [
+        'description',
+        'end',
+        'start',
+        'seq_region_name',
+        'strand',
+        'biotype',
+        'full_name',
+        'curator_summary',
+        'synonym',
+        'protein_sequence',
+        'genomic_sequence',
+    ]
+
+class AthalianaGO(Enum):
+    type = [
+        'is_a',
+        'namespace',
+        'definition',
+        'name'
+    ]
+
+    features = [
+        'namespace',
+        'definition',
+        'name'
+    ]
+
+class AthalianaPO(Enum):
+    type = [
+        'is_a',
+        'namespace',
+        'definition',
+        'name'
+    ]
+
+    features = [
+        'namespace',
+        'definition',
+        'name'
+    ]
+
+class AthalianaTO(Enum):
+    # TO lacks a namespace
+    type = [
+        'is_a',
+        'definition',
+        'name'
+    ]
+
+    features = [
+        'definition',
+        'name'
+    ]
+
+class AthalianaPrositeProfiles(Enum):
+    type = [
+        "prosite_profiles"
+    ]
+
+class AthalianaPrositePatterns(Enum):
+    type = [
+        "prosite_patterns"
+    ]
+
+class AthalianaSuperFamily(Enum):
+    type = [
+        "superfamily"
+    ]
+
+class AthalianaPrints(Enum):
+    type = [
+        "prints"
+    ]
+
+class AthalianaPanther(Enum):
+    type = [
+        "panther"
+    ]
+
+class AthalianaNode(Enum):
+    links = [
+        'gene ontology',
+        'panther',
+        'prints',
+        'plant ontology',
+        'prosite_patterns',
+        'prosite_profiles',
+        'superfamily',
+        'trait ontology',
+        'interacts_with',
+        'is_a',
+    ]
+
+    features = AthalianaGene.features.value + AthalianaGO.features.value + AthalianaPO.features.value + AthalianaTO.features.value

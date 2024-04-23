@@ -1,312 +1,326 @@
-print("\nImports...")
-import sys
-sys.path.append( '/home/ebutz/ESL2024/code/utils/train_utils' )
 
-from play_with_complex import *
-from train_utils import *
-from model_utils import *
-from ogb_utils import *
-
-import warnings
-import tqdm
-import os
-import wandb
+import regex as re
+import json
+import pandas as pd
 import torch
-from lion_pytorch import Lion
-import torch_geometric.transforms as T
-from torch_geometric.nn import *
-from torch_geometric.nn.conv import *
-from torch_geometric.nn.models import *
-from torch_geometric.nn.norm import *
-from torchmetrics.retrieval import RetrievalMRR, RetrievalHitRate
+
+from constants import *
+
+def remove_features_from_triples(triples, features_to_remove):
+    """
+    Remove features from a triples DataFrame
+
+    Parameters:
+    - triples (pandas.DataFrame): Input triples DataFrame
+    - features_to_remove (list): List of features to remove
+
+    Returns:
+    - triples (pandas.DataFrame): Output triples DataFrame
+    """
+    for feature in features_to_remove:
+        triples = triples[~triples['predicate'].str.match(feature)]
+    return triples
+
+def load_as_triples(filepath):
+
+    # Load nested dictionary from a JSON file
+    with open(filepath, 'r') as file:
+        input_dict = json.load(file)
+    subjects = []
+    predicates = []
+    objects = []
+
+    # Iterate through the nested dictionary
+    for subject, predicates_dict in input_dict.items():
+        for predicate, object in predicates_dict.items():
+            if type(object) != str or '|' not in object:
+                subjects.append(subject)
+                predicates.append(predicate)
+                objects.append(object)
+            else: # If there are multiple objects
+                for obj in object.split('|'):
+                    # Append data to lists
+                    subjects.append(subject)
+                    predicates.append(predicate)
+                    objects.append(obj)
+
+    # Create a Pandas DataFrame
+    df = pd.DataFrame({'subject': subjects, 'predicate': predicates, 'object': objects})
+
+    # Display the resulting DataFrame
+    return df
+
+def get_nodelist(df, node_type):
+    nodelist = set()
+
+    def process_node(series, regex_pattern):
+        for val in series:
+            if '|' in str(val) and re.match(regex_pattern, str(val)):
+                for node in str(val).split('|'):
+                    nodelist.add(node)
+            else:
+                if re.match(regex_pattern, str(val)):
+                    nodelist.add(val)
+
+    match node_type:
+        case 'genes':
+            # Use vectorized operations to improve performance
+            source_nodes = df['source_node'].str.extract(r'(^OsNippo\S+)').dropna()
+            nodelist.update(source_nodes.squeeze())
+            
+            # Split the 'interacts_with' column and add nodes to the set
+            interacts_with_nodes = df['interacts_with'].str.split('|').explode().dropna()
+            nodelist.update(interacts_with_nodes)
+
+        case 'go':
+            pattern = r'^GO:\d{7}'
+            process_node(df['source_node'], pattern)
+            process_node(df['gene ontology'], pattern)
+            process_node(df['is_a'], pattern)
+
+        case 'po':
+            pattern = r'^PO:\d{7}'
+            process_node(df['source_node'], pattern)
+            process_node(df['plant ontology'], pattern)
+            process_node(df['is_a'], pattern)
+
+        case 'traito':
+            pattern = r'^TO:\d{7}'
+            process_node(df['source_node'], pattern)
+            process_node(df['trait ontology'], pattern)
+            process_node(df['is_a'], pattern)
+
+        case 'prosite_profiles':
+            pattern = r'^PS\d{5}'
+            process_node(df['prosite_profiles'], pattern)
+
+        case 'prosite_patterns':
+            pattern = r'^PS\d{5}'
+            process_node(df['prosite_patterns'], pattern)
+
+        case 'superfamily':
+            pattern = r'^SSF\d{5}'
+            process_node(df['superfamily'], pattern)
+
+        case 'panther':
+            pattern = r'^PTHR\d{5}'
+            process_node(df['panther'], pattern)
+            # Remove in nodelist all nodes matching panther pattern that contain a ':' (avoids duplicates due to subfamilies)
+            nodelist = {node for node in nodelist if  re.match(r'^[^:]*$', node)}
+
+        case 'prints':
+            pattern = r'^PR\d{5}'
+            process_node(df['prints'], pattern)
+        
+        case _:
+            nodelist.update(df[node_type].dropna().unique().tolist())
+
+    return list(nodelist)
 
 
-warnings.filterwarnings('ignore')
+def get_nodelist_by_regex(triples, regex_pattern):
+    """
+    Returns a list of nodes that match the regex pattern in either the subject or object column.
+    """
+    nodelist = set()
+    subject_nodes = triples[triples['subject'].str.match(regex_pattern)]
 
-# Set device
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Device: '{device}'")
+    triples['object'] = triples['object'].astype(str) # Can only assess regex on strings
+    object_nodes = triples[triples['object'].str.match(regex_pattern)]
 
-# ----------------- Config ----------------- #
-run = wandb.init(project='these', mode='online', name='pyg_iric_noisy_labels_0_1_sig_full_intermediary_scorelist1000')
-config = wandb.config
+    nodelist.update(subject_nodes['subject'])
+    nodelist.update(object_nodes['object'])
+    return list(nodelist)
 
-# Train parameters
-config.homogeneous = False
-config.labels = {'head' : 'genes', 'relation' : 'gene_ontology', 'tail' : 'go'}
+def load_node_matrix(nodelist, node_features, encoders=None, **kwargs):
+    # reset index
+    mapping = {index: i for i, index in enumerate(nodelist)}
 
-# config.labels = {'head' : 'protein', 'relation' : '43', 'tail' : 'function'}
-config.scorelist_size = 1000 # Number of negative labels to rank per positive label on validation and test sets. This should not be changed as metrics depend on this value.
-config.split_ratio = 0.8
-config.val_ratio = 0.1
-config.test_ratio = 0.1
-config.num_neighbors = [70, 55, 13, 89, 85]
-config.batch_size = 1024
-config.train_neg_sampling_ratio = 224 # 224
-config.epochs = 18
-config.disjoint_train_ratio = 0.6
-config.lr = 0.0015308253347932983
+    x = torch.tensor([])
+    if encoders is not None:
+        xs = [encoder(node_features[col], nodelist) for col, encoder in encoders.items()]
+        x = torch.cat(xs, dim=-1).to(torch.float32)
 
-# Early stopping parameters
-config.stopper_metric = "mrr"
-config.stopper_direction = "maximize" # Whether the goal is to "minimize" or "maximize" the metric
-config.stopper_patience = 5
-config.stopper_frequency = 1
-config.stopper_relative_delta = 0.05
+    return x, mapping
 
-# Loss parameters
-config.gamma = 1.3
-config.alpha = 0.42680473078813763 
+def load_edge_csv(df, src_index_col, src_mapping, dst_index_col, dst_mapping,
+                  encoders=None, **kwargs):
+    src, dst = [], []
+    for index in df.index:
+        for target_node in df.loc[index, dst_index_col].split('|'):
+            src.append(src_mapping[index])
+            dst.append(dst_mapping[target_node])
+    # print(f'src: (name: {src_index_col}, count: {len(src)}), dst: (name: {dst_index_col}, count: {len(dst)})')
+    # print(f'set src: {len(set(src))}, set dst: {len(set(dst))}')
+    edge_index = torch.tensor([src, dst])
 
-# Model parameters
-config.gnn_layer = "ResGatedGraphConv"
-config.dropout = 0.1
-config.norm = 'DiffGroupNorm'
-config.aggregation = 'min'
-config.hidden_channels = 115
-config.num_layers = 3
-config.attention_heads = 4
+    edge_attr = None
+    if encoders is not None:
+        edge_attrs = [encoder(df[col]) for col, encoder in encoders.items()]
+        edge_attr = torch.cat(edge_attrs, dim=-1)
 
-print(config)
-
-# ----------------- Data loading ----------------- #
-# train_data, val_data, test_data = load_ogb('ogbl-biokg')
-
-# data = train_data.update(val_data).update(test_data)
-# data  = T.ToUndirected(merge=True)(data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
-# data = T.RemoveDuplicatedEdges()(data) # Remove duplicated edges
+    return edge_index, edge_attr
 
 
-# data = data.to_homogeneous()
+def add_to_dict(node, feature_name, feature_value, dictionary):
+    """
+    Add a node and its features to a dictionary
 
-# train_data  = T.ToUndirected(merge=True)(train_data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
-# train_data = T.RemoveDuplicatedEdges()(train_data) # Remove duplicated edges
-# # train_data  = train_data.to_homogeneous()
+    Parameters:
+    - node (str): Node name
+    - feature_name (str): Feature name
+    - feature_value (str): Feature value
+    - dictionary (dict): Dictionary to add the node to
+    """
 
-# val_data  = T.ToUndirected(merge=True)(val_data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
-# val_data = T.RemoveDuplicatedEdges()(val_data) # Remove duplicated edges
-# # val_data = val_data.to_homogeneous()
+    if node not in dictionary:
+        dictionary[node] = {}
+        dictionary[node].update({feature_name: [feature_value]})
+    else:
+        dictionary[node][feature_name].append(feature_value)
 
-# test_data  = T.ToUndirected(merge=True)(test_data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
-# test_data = T.RemoveDuplicatedEdges()(test_data) # Remove duplicated edges
-# test_data = test_data.to_homogeneous()
+    return dictionary
 
-# # Intialize node features in all data splits to be [0] for all nodes
-# data.x = torch.zeros(data.num_nodes, 1)
-# train_data.x = torch.zeros(train_data.num_nodes, 1)
-# val_data.x = torch.zeros(val_data.num_nodes, 1)
-# test_data.x = torch.zeros(test_data.num_nodes, 1)
+def convert_to_dict(dataset):
+    """
+    Convert a pandas dataframe into multiple node matrices and a link matrix in a dict format
 
-# for edgetype in data.edge_types:
-#     edgetype.x = torch.zeros(.num_nodes, 1)
+    Parameters:
+    - dataset (pandas.DataFrame): Input dataset in a triple format with columns 'subject', 'predicate' and 'object'
+
+    Returns:
+    - genes_features (dict): Dictionary of genes_features {node: {feature_name: feature_value}}
+    - go (dict): Dictionary of Gene Ontology terms {node: {feature_name: feature_value}}
+    - po (dict): Dictionary of Plant Ontology terms {node: {feature_name: feature_value}}
+    - to (dict): Dictionary of Trait Ontology terms {node: {feature_name: feature_value}}
+    - prosite_profiles (dict): Dictionary of Prosite profiles {node: {feature_name: feature_value}}
+    - prosite_patterns (dict): Dictionary of Prosite patterns {node: {feature_name: feature_value}}
+    - superfamily (dict): Dictionary of SuperFamily terms {node: {feature_name: feature_value}}
+    - panther (dict): Dictionary of PANTHER terms {node: {feature_name: feature_value}}
+    - prints (dict): Dictionary of PRINTS terms {node: {feature_name: feature_value}}
+    - links (dict): Dictionary of links {node: {feature_name: feature_value}}
+    """
+    # Transform dataset to nested dictionaries like {node: {feature_name: feature_value}}
+    data_dict = dataset.groupby('subject').apply(lambda group: group.set_index('predicate').to_dict()['object']).to_dict()
+
+    # Create dictionaries for each node type, and for links
+    gene_nodes, go_nodes, po_nodes, to_nodes = set(), set(), set(), set()
+    genes_features, go_features, po_features, to_features = {}, {}, {}, {}
+    prosite_profiles, prosite_patterns, superfamily, panther, prints = {}, {}, {}, {}, {}
+    gene_links, go_links, po_links, to_links, prosite_profiles_links, prosite_patterns_links, superfamily_links, panther_links, prints_links = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    for node, features in data_dict.items():
+        for feature_name, feature_value  in features.items():
+
+            # Handle Gene type
+            if feature_name in ['contig', 'fmin', 'fmax', 'strand', 'Annotation score', 'TMHMM', 'ncoils', 'Genomic Sequence', 'Protein Sequence', 'biotype', 'description', 'InterPro:description', 'Keyword', 'Trait Class', 'Allele', 'Gene Name Synonyms', 'Family', 'Explanation']:
+                add_to_dict(node, feature_name, feature_value, genes_features)
+                gene_nodes.add(node)
+
+            # Handle Ontology types
+            elif feature_name in ['namespace', 'definition', 'name']:
+                if re.match(r'^GO:\d+$', node):
+                    if node not in go_features:
+                        go_features[node] = {}
+                    go_features[node].update({feature_name: feature_value})
+                    go_nodes.add(node)
+
+                elif re.match(r'^PO:\d+$', node):
+                    if node not in po_features:
+                        po_features[node] = {}
+                    po_features[node].update({feature_name: feature_value})
+                    po_nodes.add(node)
+
+                elif re.match(r'^TO:\d+$', node):
+                    if node not in to_features:
+                        to_features[node] = {}
+                    to_features[node].update({feature_name: feature_value})
+                    to_nodes.add(node)
+
+            # Handle ontology links
+            elif feature_name == 'is_a':
+                if re.match(r'^GO:\d+$', node):
+                    add_to_dict(node, feature_name, feature_value, go_links)
+                    go_nodes.add(node)
+
+                elif re.match(r'^PO:\d+$', node):
+                    add_to_dict(node, feature_name, feature_value, po_links)
+                    po_nodes.add(node)
+
+                elif re.match(r'^TO:\d+$', node):
+                    add_to_dict(node, feature_name, feature_value, to_links)
+                    to_nodes.add(node)
+            
+
+            # Handle featureless node
+            elif feature_name == 'Prosite_profiles':
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                add_to_dict(feature_value, feature_name, node, prosite_profiles_links) # Reverse links
+                prosite_profiles[feature_value] = None # Featureless node
+                            
+            elif feature_name == 'Prosite_patterns':
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                add_to_dict(feature_value, feature_name, node, prosite_patterns_links)
+                prosite_patterns[feature_value] = None # Featureless node
 
 
-# for nodetype in data.node_types:
-#     data[nodetype].x = torch.ones(data[nodetype].num_nodes, 1)
+            elif feature_name == 'SuperFamily':
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                add_to_dict(feature_value, feature_name, node, superfamily_links)
+                superfamily[feature_value] = None # Featureless node
 
-# assert train_data.validate()
-# assert val_data.validate()
-# assert test_data.validate()
-# assert data.validate()
-# ----------------- Data loading ----------------- #
-data = load_iric_data('data/iric.csv', featureless=False)
-data  = T.ToUndirected(merge=True)(data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
-data = T.RemoveDuplicatedEdges()(data) # Remove duplicated edges
-print(data)
-assert data.validate()
 
-train_data, val_data, test_data = split_data(data, config)
-train_loader, val_loader, test_loader = build_dataloaders(train_data, val_data, test_data, config)
+            elif feature_name == 'PANTHER':
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                add_to_dict(feature_value, feature_name, node, panther_links)
+                panther[feature_value] = None # Featureless node
+            
+            elif feature_name == 'PRINTS':
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                add_to_dict(feature_value, feature_name, node, prints_links)
+                prints[feature_value] = None # Featureless node
 
-# ----------------- Model ----------------- #
-gnn_layers = get_gnn_layers(config)
-norm_layers = get_norm_layers(config, len(data.node_types))
 
+            # Handles gene-gene links, functionnal annotation links (gene-ontologies)
+            else:
+                add_to_dict(node, feature_name, feature_value, gene_links)
+                gene_nodes.add(node)
+                match feature_name:
+                    case 'Gene Ontology':
+                        add_to_dict(feature_value, feature_name, node, go_links)
+                    case 'Trait Ontology':
+                        add_to_dict(feature_value, feature_name, node, to_links)
+                    case 'Plant Ontology':
+                        add_to_dict(feature_value, feature_name, node, po_links)
+                    # interacts_with is already reversed 
+
+
+    return gene_nodes, go_nodes, po_nodes, to_nodes, genes_features, go_features, po_features, to_features, prosite_profiles, prosite_patterns, superfamily, panther, prints, gene_links, go_links, po_links, to_links, prosite_profiles_links, prosite_patterns_links, superfamily_links, panther_links, prints_links
+
+def dataframe_to_triple(df):
+    """
+    Convert a dataframe to a triple format
+
+    Parameters:
+    - df (pandas.DataFrame): Input dataframe
+
+    Returns:
+    - triples (pandas.DataFrame): Output dataframe in triple format
+    """
+    # Create a list of triples
+    triples = []
     
-# ----------------- Loops ----------------- #
-@timer_func
-def evaluate(config, loader, model, criterion, compute_all_metrics=False, loader_type='validation', stopper_metric=False):
-    """
-    Evaluate the model on a given data loader.
+    # Drop feature columns
+    df.drop(columns=IricNode.features, inplace=True)
+    for index, row in df.iterrows():
+        for column in df.columns:
+            for value in row[column].split('|'):
+                triples.append([index, column, value])
 
-    Parameters
-    ----------
-    config : object
-        An object containing the configuration parameters for the model.    
-    loader : DataLoader
-        The data loader to evaluate the model on.
-    model : Model
-        The model to evaluate.
-    criterion : callable
-        The loss function to use for evaluation.
-    compute_all_metrics : bool, optional
-        Whether to compute all metrics or partially. Default is False.
-    loader_type : str, optional
-        The type of the loader ('validation' or 'test'). Default is 'validation'.
-    stopper_metric : str or bool, optional
-        The metric that dictates when to stop training. If False, only the loss is computed. Default is False.
+    # Create a dataframe from the list of triples
+    return pd.DataFrame(triples, columns=['subject', 'predicate', 'object'])
 
-    Returns
-    -------
-    tuple
-        A tuple of the evaluation metric and the loss, depending on the value of `stopper_metric`.
-        If compute_all_metrics is True, the function logs all metrics to W&B.
-    """
-    model.eval()
-    num_neg_samples = loader.neg_sampling.amount
-    with torch.no_grad():
-        if stopper_metric or compute_all_metrics:
-            ground_truths = torch.tensor([], device='cpu')
-            preds = torch.tensor([], device='cpu')
-            indexes = torch.tensor([], device='cpu')
-            total_loss, total_examples = 0, 0
-            index_end = loader.batch_size
+if __name__ == '__main__':
+    import pandas as pd
 
-        for sampled_data in loader:
-            sampled_data = sampled_data.to(device)
-
-            batch_size = len(sampled_data[config.labels['tail']].dst_pos_index)
-            pred = model(sampled_data, config)
-            pos_samples = torch.ones(batch_size, device=device)
-            neg_samples = torch.zeros(num_neg_samples*batch_size, device=device)
-            ground_truth = torch.cat((pos_samples, neg_samples))
-
-            if stopper_metric or compute_all_metrics: # Store preds and truths for all batches, and compute indices to calc metrics
-                index_pos = torch.arange(end=index_end, start=index_end-batch_size) # index for predictions with pos. ground_truth
-                index_neg = torch.arange(end=index_end, start=index_end-batch_size).repeat_interleave(num_neg_samples)
-                index = torch.cat((index_pos, index_neg))
-                indexes = torch.cat((indexes, index.to('cpu')))
-                preds = torch.cat((preds, pred.to('cpu')))
-                ground_truths = torch.cat((ground_truths, ground_truth.to('cpu')))
-                index_end += batch_size
-
-            eval_loss = criterion(pred, ground_truth, gamma=config.gamma, alpha=config.alpha)
-
-            # if not stopper_metric: # Just logging loss
-            #     wandb.log({"running_val_loss": eval_loss})
-            #     break
-            # else:
-            total_loss += float(eval_loss) * pred.numel() 
-            total_examples += pred.numel()
-            eval_loss = total_loss / total_examples
-
-            # if stopper_metric and not compute_all_metrics:
-            #     if index_end >= 2048: # Compute approx. intermediate metric on a few datapoints to speed up hyperopt process
-            #         break 
-
-        model.train()
-
-        if stopper_metric and not compute_all_metrics: # Compute only the metric that dictates stopping
-            indexes = indexes.long()
-
-            # # Log heatmap between prediction and ground truth. Useful for visualization / debugging. overhead 0.2s per epoch for a single sample.
-            # heatmap = heatmaps(preds, ground_truths, indexes) 
-            # wandb.log({f"heatmap": wandb.Image(heatmap)})
-            # heatmap.close() # Free up memory
-
-            match stopper_metric:
-                case "val_loss":
-                    eval_loss = total_loss / total_examples
-                    return eval_loss
-                
-                case "mrr":
-                    mrr = RetrievalMRR().to(device)
-                    return mrr(preds, ground_truths, indexes=indexes), eval_loss
-                
-                case "hit_at_10":
-                    hit_at_10 = RetrievalHitRate(top_k=10).to(device)
-                    return hit_at_10(preds, ground_truths, indexes=indexes), eval_loss
-                
-                case "hit_at_5":
-                    hit_at_5 = RetrievalHitRate(top_k=5).to(device)
-                    return hit_at_5(preds, ground_truths, indexes=indexes), eval_loss
-                
-                case "hit_at_3":
-                    hit_at_3 = RetrievalHitRate(top_k=3).to(device)
-                    return hit_at_3(preds, ground_truths, indexes=indexes), eval_loss
-                
-                case "hit_at_1":
-                    hit_at_1 = RetrievalHitRate(top_k=1).to(device)
-                    return hit_at_1(preds, ground_truths, indexes=indexes), eval_loss
-                
-                case _:
-                    raise ValueError(f"Unrecognized stopper metric: '{stopper_metric}'")
-                
-        if compute_all_metrics: # Compute all metrics at the end of training
-            indexes = indexes.long()
-            mrr = RetrievalMRR().to(device)
-            hit_at_10 = RetrievalHitRate(top_k=10).to(device)
-            hit_at_5 = RetrievalHitRate(top_k=5).to(device)
-            hit_at_3 = RetrievalHitRate(top_k=3).to(device)
-            hit_at_1 = RetrievalHitRate(top_k=1).to(device)
-            
-            mrr = mrr(preds, ground_truths, indexes=indexes)
-            hit_at_10 = hit_at_10(preds, ground_truths, indexes=indexes)
-            hit_at_5 = hit_at_5(preds, ground_truths, indexes=indexes)
-            hit_at_3 = hit_at_3(preds, ground_truths, indexes=indexes)
-            hit_at_1 = hit_at_1(preds, ground_truths, indexes=indexes)
-
-            wandb.log({
-                f"{loader_type}MRR": mrr, f"{loader_type}hit_at_10": hit_at_10, f"{loader_type}hit_at_5": hit_at_5, f"{loader_type}hit_at_3": hit_at_3, f"{loader_type}hit_at_1": hit_at_1
-            })
-
-
-# Set device
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Device: '{device}'")
-
-model = Model(config, data, norm_layers, gnn_layers).to(device)
-print(model)
-
-criterion = sigmoid_focal_loss
-optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
-# optimizer = Lion(model.parameters(), lr=config.lr, weight_decay=1e-2)
-early_stopper = EarlyStopper(frequency=config.stopper_frequency, patience=config.stopper_patience, direction=config.stopper_direction, relative_delta=config.stopper_relative_delta)
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
-
-@timer_func
-def train(config, train_loader, val_loader, model, criterion, optimizer, early_stopper):
-    for epoch in range(config.epochs):
-        total_loss = total_examples = 0
-
-        for sampled_data in tqdm.tqdm(train_loader, desc="Training"):
-
-            sampled_data = sampled_data.to(device)
-            pred = model(sampled_data, config)
-            pos_samples = torch.ones(len(sampled_data[config.labels['tail']].dst_pos_index), device=device)
-            neg_samples = torch.zeros(len(sampled_data[config.labels['tail']].dst_neg_index.view(-1)), device=device) # As many zeroes as there are negative samples * batch_size
-            ground_truth = torch.cat((pos_samples, neg_samples))
-            # Add gaussian noise to pos_samples to simulate noisy labels. Added noise must be negative and not exceed 1.
-            ground_truth += torch.normal(mean=0, std=1, size=(len(ground_truth),), device=device)
-            # apply sigmoid
-            ground_truth = torch.sigmoid(ground_truth)
-            # ground_truth = torch.sigmoid(ground_truth)
-            loss = criterion(pred, ground_truth, gamma=config.gamma, alpha=config.alpha)
-            wandb.log({"loss": loss})
-            
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
-            total_loss += float(loss) * pred.numel()
-            total_examples += pred.numel()
-        train_loss = total_loss / total_examples
-        print(f"Epoch: {epoch:03d}, Avg. Loss: {train_loss:.10f}")
-        # scheduler.step()
-
-        # Compute metrics and check for early stopping
-        score, val_loss = evaluate(config, val_loader, model, criterion, stopper_metric=config.stopper_metric)
-        wandb.log({"avg_loss": train_loss, "val_loss": val_loss, f"{config.stopper_metric}": score})
-
-        # early_stopper(score)
-        # if early_stopper.early_stop:
-        #     print("Early stopping triggered at epoch", epoch)
-        #     break
-
-    print("Training done.")
-
-train(config, train_loader, val_loader, model, criterion, optimizer, early_stopper)
-evaluate(config, val_loader, model, criterion, compute_all_metrics=True, loader_type='validation', stopper_metric=False)
-evaluate(config, test_loader, model, criterion, compute_all_metrics=True, loader_type='test', stopper_metric=False)
+    dataset = pd.read_csv('data/iric_triples.csv')
+    genes, go, po, to, prosite_profiles, prosite_patterns, superfamily, panther, prints, gene_links, go_links, po_links, to_links = convert_to_dict(dataset)
