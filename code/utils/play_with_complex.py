@@ -10,7 +10,6 @@ import nxontology as nxo
 import copy
 import wandb
 
-device = 'cpu'
 def shuffle_tensor(t: torch.Tensor):
     '''
     Shuffles elements of a tensor.
