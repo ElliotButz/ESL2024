@@ -42,7 +42,7 @@ model_parameters_path = "/home/ebutz/ESL2024/data/mapping_datasets_and_model_for
 
 # Ontology
 ontology_path = "/home/ebutz/ESL2024/data/go-basic.json.gz"
-check_dicts = False
+check_dicts = True
 
 # ------------- Cuda ------------- #
 
@@ -75,6 +75,8 @@ with open(altails_dict_path, 'rb') as handle:
     mapped_alt_tails = pickle.load(handle)
 print("Alternative tails dict (first key-value pair):", list(mapped_alt_tails.items())[0])
 
+
+print('(27206, 0) in dict :', (27206, 0) in list(mapped_alt_tails.keys()))
 # # ------------- Making datasets ------------- #
 
 print("\nMaking datasets...")
@@ -122,44 +124,47 @@ pwc.mapped_alt_tails = mapped_alt_tails
 pwc.device           = device
 
 
-epochs = 1500
+epochs = 1
 eval_period = 5
 use_wandb = True
 
 # ------------- Init model ------------- #
 
-for hidden_channels in [250, 15, 75, 15, 176, 250, 350]:
-    xp_name = f"Lin VS Baseline with {hidden_channels}*6 HC on {epochs} epochs"
+for hidden_channels in [15, 250,1000]:
 
-    pwc.train_model(model_name='tail_only_ComplEx', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
-    
-    pwc.train_model(model_name='ComplEx_L_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
-    
-    pwc.train_model(model_name='ComplEx_L_FRL_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
-    
-    pwc.train_model(model_name='ComplEx_FRL_U_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
+    for npp in [1]:
+        xp_name = f"Augmented negatives Lin VS Baseline with {hidden_channels}*6 HC on {epochs} epochs"
 
-    pwc.train_model(model_name='ComplEx_UGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
-    
-    pwc.train_model(model_name='ComplEx_LGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,
-                device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
-                train_set=train_set, test_set=test_set,
-                file_import = pwc)
+        pwc.train_model(model_name='tail_only_ComplEx', hidden_channels_list=[hidden_channels],
+                        epochs=epochs, eval_period=eval_period, negative_per_positive= npp,
+                    device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                    train_set=train_set, test_set=test_set,
+                    file_import = pwc)
+        
+        pwc.train_model(model_name='ComplEx_BLS_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period, negative_per_positive= npp,
+                    device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+                    train_set=train_set, test_set=test_set,
+                    file_import = pwc)
+        
+        # pwc.train_model(model_name='ComplEx_L_FRL_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,negative_per_positive= npp,
+        #             device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+        #             train_set=train_set, test_set=test_set,
+        #             file_import = pwc)
+        
+        # pwc.train_model(model_name='ComplEx_FRL_U_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,negative_per_positive= npp,
+        #             device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+        #             train_set=train_set, test_set=test_set,
+        #             file_import = pwc)
+
+        # pwc.train_model(model_name='ComplEx_UGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,negative_per_positive= npp,
+        #             device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+        #             train_set=train_set, test_set=test_set,
+        #             file_import = pwc)
+        
+        # pwc.train_model(model_name='ComplEx_LGN_labels', hidden_channels_list=[hidden_channels], epochs=epochs, eval_period=eval_period,negative_per_positive= npp,
+        #             device=device, use_wandb=use_wandb, xp_name=f'Lin or noise with {hidden_channels} HC',
+        #             train_set=train_set, test_set=test_set,
+        #             file_import = pwc)
     
 
 print('Finished !')
