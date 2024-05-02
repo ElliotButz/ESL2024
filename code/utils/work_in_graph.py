@@ -127,6 +127,8 @@ def get_family(ontology_edge_index, max_dist):
     - ontology_edge_index (torch.Tensor): Edge index tensor representing the ontology graph.
                                           /!\ Graph sould probably be oriented !
     - max_dist (int): Maximum distance to traverse to construct the family graph.
+                    
+
     Returns:
     - df (pandas.DataFrame): DataFrame containing information about the family graph.
                             Columns:
@@ -173,15 +175,16 @@ def get_family(ontology_edge_index, max_dist):
         tqdm.pandas(desc=f'Making dist {dist}-children ')
         df[f'{dist}-children'] = df.progress_apply(lambda row : successors_for_nodes(graph = G, nodes = row[f'{dist-1}-children']),
                                                     axis = 1)
+        
         # display(df)
     
     step = f'{dist}-familiy acquired.'
     print(step)
 
-    tqdm.pandas(desc=f'Calculating lineage')
+    tqdm.pandas(desc=f'Calculating lineage          ')
     df['lineage'] = df.progress_apply(lambda row: set.union(*[row[f'{dist}-children'] for dist in range(0, max_dist+1)]+
-                                                             [row[f'{dist}-parents'] for dist in range(1, max_dist+1)],
-                                                             row['0-neighbors'])
+                                                             [row[f'{dist}-parents'] for dist in range(0, max_dist+1)] +
+                                                             [row['departure']])
                                       ,axis=1)
     
     tqdm.pandas(desc=f'Calculating familiy - lineage')
