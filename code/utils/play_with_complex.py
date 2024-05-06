@@ -274,6 +274,16 @@ def lin_sim_on_mapped_terms(mapped_term1, mapped_term2):
         return sim
     else:
         return 0  
+    
+def lin_sims_for_batch(term1: torch.Tensor, term2: torch.Tensor)->torch.Tensor:
+
+    batch = pd.DataFrame(torch.transpose(torch.stack((term1.cpu(), term2.cpu())),
+                                         0,1))
+    
+    return torch.Tensor(batch.apply(lambda row : lin_sim_on_mapped_terms(mapped_term1=row[0],
+                                                                         mapped_term2=row[1],
+                                                                         ),
+                                    axis=1))
 
 def best_lim_sim_for_triple(head, rel, tail)-> torch.Tensor:
     max_lin_sim=0
@@ -300,17 +310,6 @@ def best_lin_sims_for_batch(head_index:torch.Tensor, rel_type:torch.Tensor, tail
     return torch.Tensor(batch.apply(lambda row : best_lim_sim_for_triple(head=row[0],
                                                                          rel=row[1],
                                                                          tail=row[2]),
-                                    axis=1))
-
-def lin_sims_for_batch(term1: torch.Tensor, term2: torch.Tensor)->torch.Tensor:
-
-    batch = pd.DataFrame(torch.transpose(torch.stack((term1, term2)),
-                                         0,1)
-                        )
-    
-    return torch.Tensor(batch.apply(lambda row : lin_sim_on_mapped_terms(mapped_term1=row[0],
-                                                                         mapped_term2=row[1],
-                                                                         ),
                                     axis=1))
 
 class ComplEx(ComplEx):

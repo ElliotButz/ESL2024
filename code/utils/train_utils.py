@@ -176,6 +176,10 @@ def load_iric_data(path, featureless=False):
     _, prints_mapping = load_node_matrix(nodelist['prints'], features['prints'])
 
     # Isolate columns representing links between nodes
+
+    # TODO : Check if one obtains the same result applicating this :
+            # A value is trying to be set on a copy of a slice from a DataFrame.
+            # Try using .loc[row_indexer,col_indexer] = value instead
     df_links = df[IricNode.links.value]
     df_links['source_node'] = df_links.index
         
