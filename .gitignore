@@ -7,9 +7,14 @@ code/utils/__pycache__/load_and_manipulates_triples.cpython-311.pyc
 code/utils/__pycache__/work_with_go.cpython-311.pyc
 code/utils/test_goatools.ipynb
 __pycache__
-code/Old/
 code/tests/
 /wandb/
 code/Test_pipeline.ipynb
 code/test.py
 code/wandb/
+code/01_Train_ComplEx.ipynb
+code/02_ReTrain_ComplEx_with_LinSim.ipynb
+code/CLEAN_Lin_ComplEx.ipynb
+code/Making_ComplEx_embeddings.ipynb
+code/test_models.ipynb
+code/utils/train_utils
