@@ -1,0 +1,574 @@
+
+Graph is homogeneous : False
+/home/ebutz/ESL2024/code/utils/train_utils.py:184: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  df_links['source_node'] = df_links.index
+HeteroData(
+  genes={ x=[72335, 29] },
+  go={ x=[42979, 3] },
+  po={ x=[1662, 2] },
+  traito={ x=[1636, 1] },
+  prosite_profiles={ x=[627, 1] },
+  prosite_patterns={ x=[652, 1] },
+  superfamily={ x=[957, 1] },
+  panther={ x=[5971, 1] },
+  prints={ x=[420, 1] },
+  (genes, interacts_with, genes)={ edge_index=[2, 1120849] },
+  (genes, gene_ontology, go)={ edge_index=[2, 169248] },
+  (genes, trait_ontology, traito)={ edge_index=[2, 15080] },
+  (genes, plant_ontology, po)={ edge_index=[2, 6125] },
+  (genes, profile, prosite_profiles)={ edge_index=[2, 12239] },
+  (genes, pattern, prosite_patterns)={ edge_index=[2, 6677] },
+  (genes, family, superfamily)={ edge_index=[2, 20742] },
+  (genes, panther_id, panther)={ edge_index=[2, 25319] },
+  (genes, prints_id, prints)={ edge_index=[2, 4365] },
+  (go, is_a, go)={ edge_index=[2, 136436] },
+  (po, is_a, po)={ edge_index=[2, 3548] },
+  (traito, is_a, traito)={ edge_index=[2, 3770] },
+  (go, rev_gene_ontology, genes)={ edge_index=[2, 169248] },
+  (traito, rev_trait_ontology, genes)={ edge_index=[2, 15080] },
+  (po, rev_plant_ontology, genes)={ edge_index=[2, 6125] },
+  (prosite_profiles, rev_profile, genes)={ edge_index=[2, 12239] },
+  (prosite_patterns, rev_pattern, genes)={ edge_index=[2, 6677] },
+  (superfamily, rev_family, genes)={ edge_index=[2, 20742] },
+  (panther, rev_panther_id, genes)={ edge_index=[2, 25319] },
+  (prints, rev_prints_id, genes)={ edge_index=[2, 4365] }
+)
+data look valid :  True
+Function 'split_data' executed in 0.0177s
+Function 'build_dataloaders' executed in 0.1557s
+Loading ontology...
+HeteroData(
+  genes={
+    x=[25017, 29],
+    n_id=[25017],
+    num_sampled_nodes=[6],
+    src_index=[1024],
+  },
+  go={
+    x=[42973, 3],
+    n_id=[42973],
+    num_sampled_nodes=[6],
+    dst_pos_index=[1024],
+    dst_neg_index=[1024, 224],
+  },
+  po={
+    x=[1483, 2],
+    n_id=[1483],
+    num_sampled_nodes=[6],
+  },
+  traito={
+    x=[1510, 1],
+    n_id=[1510],
+    num_sampled_nodes=[6],
+  },
+  prosite_profiles={
+    x=[622, 1],
+    n_id=[622],
+    num_sampled_nodes=[6],
+  },
+  prosite_patterns={
+    x=[652, 1],
+    n_id=[652],
+    num_sampled_nodes=[6],
+  },
+  superfamily={
+    x=[949, 1],
+    n_id=[949],
+    num_sampled_nodes=[6],
+  },
+  panther={
+    x=[5515, 1],
+    n_id=[5515],
+    num_sampled_nodes=[6],
+  },
+  prints={
+    x=[420, 1],
+    n_id=[420],
+    num_sampled_nodes=[6],
+  },
+  (genes, interacts_with, genes)={
+    edge_index=[2, 488080],
+    e_id=[488080],
+    num_sampled_edges=[5],
+  },
+  (genes, gene_ontology, go)={
+    edge_index=[2, 32286],
+    edge_label=[81240],
+    e_id=[32286],
+    num_sampled_edges=[5],
+    input_id=[1024],
+  },
+  (genes, trait_ontology, traito)={
+    edge_index=[2, 7965],
+    e_id=[7965],
+    num_sampled_edges=[5],
+  },
+  (genes, plant_ontology, po)={
+    edge_index=[2, 3096],
+    e_id=[3096],
+    num_sampled_edges=[5],
+  },
+  (genes, profile, prosite_profiles)={
+    edge_index=[2, 7456],
+    e_id=[7456],
+    num_sampled_edges=[5],
+  },
+  (genes, pattern, prosite_patterns)={
+    edge_index=[2, 4155],
+    e_id=[4155],
+    num_sampled_edges=[5],
+  },
+  (genes, family, superfamily)={
+    edge_index=[2, 10582],
+    e_id=[10582],
+    num_sampled_edges=[5],
+  },
+  (genes, panther_id, panther)={
+    edge_index=[2, 22493],
+    e_id=[22493],
+    num_sampled_edges=[5],
+  },
+  (genes, prints_id, prints)={
+    edge_index=[2, 3140],
+    e_id=[3140],
+    num_sampled_edges=[5],
+  },
+  (go, is_a, go)={
+    edge_index=[2, 133078],
+    e_id=[133078],
+    num_sampled_edges=[5],
+  },
+  (po, is_a, po)={
+    edge_index=[2, 2929],
+    e_id=[2929],
+    num_sampled_edges=[5],
+  },
+  (traito, is_a, traito)={
+    edge_index=[2, 3410],
+    e_id=[3410],
+    num_sampled_edges=[5],
+  },
+  (go, rev_gene_ontology, genes)={
+    edge_index=[2, 53574],
+    e_id=[53574],
+    num_sampled_edges=[5],
+  },
+  (traito, rev_trait_ontology, genes)={
+    edge_index=[2, 15035],
+    e_id=[15035],
+    num_sampled_edges=[5],
+  },
+  (po, rev_plant_ontology, genes)={
+    edge_index=[2, 6081],
+    e_id=[6081],
+    num_sampled_edges=[5],
+  },
+  (prosite_profiles, rev_profile, genes)={
+    edge_index=[2, 12112],
+    e_id=[12112],
+    num_sampled_edges=[5],
+  },
+  (prosite_patterns, rev_pattern, genes)={
+    edge_index=[2, 6651],
+    e_id=[6651],
+    num_sampled_edges=[5],
+  },
+  (superfamily, rev_family, genes)={
+    edge_index=[2, 20332],
+    e_id=[20332],
+    num_sampled_edges=[5],
+  },
+  (panther, rev_panther_id, genes)={
+    edge_index=[2, 23918],
+    e_id=[23918],
+    num_sampled_edges=[5],
+  },
+  (prints, rev_prints_id, genes)={
+    edge_index=[2, 4300],
+    e_id=[4300],
+    num_sampled_edges=[5],
+  }
+)
+HeteroData(
+  genes={
+    x=[25017, 29],
+    n_id=[25017],
+    num_sampled_nodes=[6],
+    src_index=[1024],
+  },
+  go={
+    x=[42973, 3],
+    n_id=[42973],
+    num_sampled_nodes=[6],
+    dst_pos_index=[1024],
+    dst_neg_index=[1024, 224],
+  },
+  po={
+    x=[1483, 2],
+    n_id=[1483],
+    num_sampled_nodes=[6],
+  },
+  traito={
+    x=[1510, 1],
+    n_id=[1510],
+    num_sampled_nodes=[6],
+  },
+  prosite_profiles={
+    x=[622, 1],
+    n_id=[622],
+    num_sampled_nodes=[6],
+  },
+  prosite_patterns={
+    x=[652, 1],
+    n_id=[652],
+    num_sampled_nodes=[6],
+  },
+  superfamily={
+    x=[949, 1],
+    n_id=[949],
+    num_sampled_nodes=[6],
+  },
+  panther={
+    x=[5515, 1],
+    n_id=[5515],
+    num_sampled_nodes=[6],
+  },
+  prints={
+    x=[420, 1],
+    n_id=[420],
+    num_sampled_nodes=[6],
+  },
+  (genes, interacts_with, genes)={
+    edge_index=[2, 488080],
+    e_id=[488080],
+    num_sampled_edges=[5],
+  },
+  (genes, gene_ontology, go)={
+    edge_index=[2, 32286],
+    edge_label=[81240],
+    e_id=[32286],
+    num_sampled_edges=[5],
+    input_id=[1024],
+  },
+  (genes, trait_ontology, traito)={
+    edge_index=[2, 7965],
+    e_id=[7965],
+    num_sampled_edges=[5],
+  },
+  (genes, plant_ontology, po)={
+    edge_index=[2, 3096],
+    e_id=[3096],
+    num_sampled_edges=[5],
+  },
+  (genes, profile, prosite_profiles)={
+    edge_index=[2, 7456],
+    e_id=[7456],
+    num_sampled_edges=[5],
+  },
+  (genes, pattern, prosite_patterns)={
+    edge_index=[2, 4155],
+    e_id=[4155],
+    num_sampled_edges=[5],
+  },
+  (genes, family, superfamily)={
+    edge_index=[2, 10582],
+    e_id=[10582],
+    num_sampled_edges=[5],
+  },
+  (genes, panther_id, panther)={
+    edge_index=[2, 22493],
+    e_id=[22493],
+    num_sampled_edges=[5],
+  },
+  (genes, prints_id, prints)={
+    edge_index=[2, 3140],
+    e_id=[3140],
+    num_sampled_edges=[5],
+  },
+  (go, is_a, go)={
+    edge_index=[2, 133078],
+    e_id=[133078],
+    num_sampled_edges=[5],
+  },
+  (po, is_a, po)={
+    edge_index=[2, 2929],
+    e_id=[2929],
+    num_sampled_edges=[5],
+  },
+  (traito, is_a, traito)={
+    edge_index=[2, 3410],
+    e_id=[3410],
+    num_sampled_edges=[5],
+  },
+  (go, rev_gene_ontology, genes)={
+    edge_index=[2, 53574],
+    e_id=[53574],
+    num_sampled_edges=[5],
+  },
+  (traito, rev_trait_ontology, genes)={
+    edge_index=[2, 15035],
+    e_id=[15035],
+    num_sampled_edges=[5],
+  },
+  (po, rev_plant_ontology, genes)={
+    edge_index=[2, 6081],
+    e_id=[6081],
+    num_sampled_edges=[5],
+  },
+  (prosite_profiles, rev_profile, genes)={
+    edge_index=[2, 12112],
+    e_id=[12112],
+    num_sampled_edges=[5],
+  },
+  (prosite_patterns, rev_pattern, genes)={
+    edge_index=[2, 6651],
+    e_id=[6651],
+    num_sampled_edges=[5],
+  },
+  (superfamily, rev_family, genes)={
+    edge_index=[2, 20332],
+    e_id=[20332],
+    num_sampled_edges=[5],
+  },
+  (panther, rev_panther_id, genes)={
+    edge_index=[2, 23918],
+    e_id=[23918],
+    num_sampled_edges=[5],
+  },
+  (prints, rev_prints_id, genes)={
+    edge_index=[2, 4300],
+    e_id=[4300],
+    num_sampled_edges=[5],
+  }
+)
+{'x': tensor([[1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.],
+        ...,
+        [1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.]]), 'n_id': tensor([    0,     1,     2,  ..., 16821, 11972,  1858]), 'num_sampled_nodes': [42777, 196, 0, 0, 0, 0], 'dst_pos_index': tensor([29667, 11256, 13816,  ..., 41443, 29514, 27923]), 'dst_neg_index': tensor([[26571, 21609,  8660,  ..., 39293, 21777,  7075],
+        [23272,  5983, 24770,  ..., 31439, 32191, 33596],
+        [24311, 25341, 41184,  ...,  5227, 10957, 18279],
+        ...,
+        [39256, 37557,  1785,  ..., 15280, 15529, 24096],
+        [10927, 25454, 11546,  ..., 10155, 10686,  1824],
+        [13106,  3202, 33082,  ..., 19620, 12795,  3273]])}
+HeteroData(
+  genes={
+    x=[25017, 29],
+    n_id=[25017],
+    num_sampled_nodes=[6],
+    src_index=[1024],
+  },
+  go={
+    x=[42973, 3],
+    n_id=[42973],
+    num_sampled_nodes=[6],
+    dst_pos_index=[1024],
+    dst_neg_index=[1024, 224],
+  },
+  po={
+    x=[1483, 2],
+    n_id=[1483],
+    num_sampled_nodes=[6],
+  },
+  traito={
+    x=[1510, 1],
+    n_id=[1510],
+    num_sampled_nodes=[6],
+  },
+  prosite_profiles={
+    x=[622, 1],
+    n_id=[622],
+    num_sampled_nodes=[6],
+  },
+  prosite_patterns={
+    x=[652, 1],
+    n_id=[652],
+    num_sampled_nodes=[6],
+  },
+  superfamily={
+    x=[949, 1],
+    n_id=[949],
+    num_sampled_nodes=[6],
+  },
+  panther={
+    x=[5515, 1],
+    n_id=[5515],
+    num_sampled_nodes=[6],
+  },
+  prints={
+    x=[420, 1],
+    n_id=[420],
+    num_sampled_nodes=[6],
+  },
+  (genes, interacts_with, genes)={
+    edge_index=[2, 488080],
+    e_id=[488080],
+    num_sampled_edges=[5],
+  },
+  (genes, gene_ontology, go)={
+    edge_index=[2, 32286],
+    edge_label=[81240],
+    e_id=[32286],
+    num_sampled_edges=[5],
+    input_id=[1024],
+  },
+  (genes, trait_ontology, traito)={
+    edge_index=[2, 7965],
+    e_id=[7965],
+    num_sampled_edges=[5],
+  },
+  (genes, plant_ontology, po)={
+    edge_index=[2, 3096],
+    e_id=[3096],
+    num_sampled_edges=[5],
+  },
+  (genes, profile, prosite_profiles)={
+    edge_index=[2, 7456],
+    e_id=[7456],
+    num_sampled_edges=[5],
+  },
+  (genes, pattern, prosite_patterns)={
+    edge_index=[2, 4155],
+    e_id=[4155],
+    num_sampled_edges=[5],
+  },
+  (genes, family, superfamily)={
+    edge_index=[2, 10582],
+    e_id=[10582],
+    num_sampled_edges=[5],
+  },
+  (genes, panther_id, panther)={
+    edge_index=[2, 22493],
+    e_id=[22493],
+    num_sampled_edges=[5],
+  },
+  (genes, prints_id, prints)={
+    edge_index=[2, 3140],
+    e_id=[3140],
+    num_sampled_edges=[5],
+  },
+  (go, is_a, go)={
+    edge_index=[2, 133078],
+    e_id=[133078],
+    num_sampled_edges=[5],
+  },
+  (po, is_a, po)={
+    edge_index=[2, 2929],
+    e_id=[2929],
+    num_sampled_edges=[5],
+  },
+  (traito, is_a, traito)={
+    edge_index=[2, 3410],
+    e_id=[3410],
+    num_sampled_edges=[5],
+  },
+  (go, rev_gene_ontology, genes)={
+    edge_index=[2, 53574],
+    e_id=[53574],
+    num_sampled_edges=[5],
+  },
+  (traito, rev_trait_ontology, genes)={
+    edge_index=[2, 15035],
+    e_id=[15035],
+    num_sampled_edges=[5],
+  },
+  (po, rev_plant_ontology, genes)={
+    edge_index=[2, 6081],
+    e_id=[6081],
+    num_sampled_edges=[5],
+  },
+  (prosite_profiles, rev_profile, genes)={
+    edge_index=[2, 12112],
+    e_id=[12112],
+    num_sampled_edges=[5],
+  },
+  (prosite_patterns, rev_pattern, genes)={
+    edge_index=[2, 6651],
+    e_id=[6651],
+    num_sampled_edges=[5],
+  },
+  (superfamily, rev_family, genes)={
+    edge_index=[2, 20332],
+    e_id=[20332],
+    num_sampled_edges=[5],
+  },
+  (panther, rev_panther_id, genes)={
+    edge_index=[2, 23918],
+    e_id=[23918],
+    num_sampled_edges=[5],
+  },
+  (prints, rev_prints_id, genes)={
+    edge_index=[2, 4300],
+    e_id=[4300],
+    num_sampled_edges=[5],
+  }
+)
+{'x': tensor([[1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.],
+        ...,
+        [1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.]]), 'n_id': tensor([    0,     1,     2,  ..., 16821, 11972,  1858]), 'num_sampled_nodes': [42777, 196, 0, 0, 0, 0], 'dst_pos_index': tensor([29667, 11256, 13816,  ..., 41443, 29514, 27923]), 'dst_neg_index': tensor([[26571, 21609,  8660,  ..., 39293, 21777,  7075],
+        [23272,  5983, 24770,  ..., 31439, 32191, 33596],
+        [24311, 25341, 41184,  ...,  5227, 10957, 18279],
+        ...,
+        [39256, 37557,  1785,  ..., 15280, 15529, 24096],
+        [10927, 25454, 11546,  ..., 10155, 10686,  1824],
+        [13106,  3202, 33082,  ..., 19620, 12795,  3273]])}
+KeysView({'x': tensor([[1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.],
+        ...,
+        [1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.]]), 'n_id': tensor([    0,     1,     2,  ..., 16821, 11972,  1858]), 'num_sampled_nodes': [42777, 196, 0, 0, 0, 0], 'dst_pos_index': tensor([29667, 11256, 13816,  ..., 41443, 29514, 27923]), 'dst_neg_index': tensor([[26571, 21609,  8660,  ..., 39293, 21777,  7075],
+        [23272,  5983, 24770,  ..., 31439, 32191, 33596],
+        [24311, 25341, 41184,  ...,  5227, 10957, 18279],
+        ...,
+        [39256, 37557,  1785,  ..., 15280, 15529, 24096],
+        [10927, 25454, 11546,  ..., 10155, 10686,  1824],
+        [13106,  3202, 33082,  ..., 19620, 12795,  3273]])})
+KeysView({'x': tensor([[1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.],
+        ...,
+        [1., 0., 0.],
+        [1., 0., 0.],
+        [1., 0., 0.]]), 'n_id': tensor([    0,     1,     2,  ..., 16821, 11972,  1858]), 'num_sampled_nodes': [42777, 196, 0, 0, 0, 0], 'dst_pos_index': tensor([29667, 11256, 13816,  ..., 41443, 29514, 27923]), 'dst_neg_index': tensor([[26571, 21609,  8660,  ..., 39293, 21777,  7075],
+        [23272,  5983, 24770,  ..., 31439, 32191, 33596],
+        [24311, 25341, 41184,  ...,  5227, 10957, 18279],
+        ...,
+        [39256, 37557,  1785,  ..., 15280, 15529, 24096],
+        [10927, 25454, 11546,  ..., 10155, 10686,  1824],
+        [13106,  3202, 33082,  ..., 19620, 12795,  3273]])})
+{'edge_index': tensor([[22803, 25778, 36862,  ..., 41669, 42133, 13374],
+        [    0,     0,     0,  ..., 42970, 42971, 42972]]), 'e_id': tensor([ 72605,  81713, 117680,  ..., 132725, 134139,  43446]), 'num_sampled_edges': [132483, 595, 0, 0, 0]}
+e_id
+x
+n_id
+edge_index
+dst_pos_index
+edge_label
+input_id
+dst_neg_index
+num_sampled_nodes
+src_index
+num_sampled_edges
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}

@@ -1,0 +1,42 @@
+
+Graph is homogeneous : False
+/home/ebutz/ESL2024/code/utils/train_utils.py:184: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  df_links['source_node'] = df_links.index
+HeteroData(
+  genes={ x=[72335, 29] },
+  go={ x=[42979, 3] },
+  po={ x=[1662, 2] },
+  traito={ x=[1636, 1] },
+  prosite_profiles={ x=[627, 1] },
+  prosite_patterns={ x=[652, 1] },
+  superfamily={ x=[957, 1] },
+  panther={ x=[5971, 1] },
+  prints={ x=[420, 1] },
+  (genes, interacts_with, genes)={ edge_index=[2, 1120849] },
+  (genes, gene_ontology, go)={ edge_index=[2, 169248] },
+  (genes, trait_ontology, traito)={ edge_index=[2, 15080] },
+  (genes, plant_ontology, po)={ edge_index=[2, 6125] },
+  (genes, profile, prosite_profiles)={ edge_index=[2, 12239] },
+  (genes, pattern, prosite_patterns)={ edge_index=[2, 6677] },
+  (genes, family, superfamily)={ edge_index=[2, 20742] },
+  (genes, panther_id, panther)={ edge_index=[2, 25319] },
+  (genes, prints_id, prints)={ edge_index=[2, 4365] },
+  (go, is_a, go)={ edge_index=[2, 136436] },
+  (po, is_a, po)={ edge_index=[2, 3548] },
+  (traito, is_a, traito)={ edge_index=[2, 3770] },
+  (go, rev_gene_ontology, genes)={ edge_index=[2, 169248] },
+  (traito, rev_trait_ontology, genes)={ edge_index=[2, 15080] },
+  (po, rev_plant_ontology, genes)={ edge_index=[2, 6125] },
+  (prosite_profiles, rev_profile, genes)={ edge_index=[2, 12239] },
+  (prosite_patterns, rev_pattern, genes)={ edge_index=[2, 6677] },
+  (superfamily, rev_family, genes)={ edge_index=[2, 20742] },
+  (panther, rev_panther_id, genes)={ edge_index=[2, 25319] },
+  (prints, rev_prints_id, genes)={ edge_index=[2, 4365] }
+)
+data look valid :  True
+Function 'split_data' executed in 0.0430s
+Function 'build_dataloaders' executed in 0.6165s
+Loading ontology...

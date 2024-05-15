@@ -1,0 +1,259 @@
+{
+    "os": "Linux-3.10.0-862.9.1.el7.x86_64-x86_64-with-glibc2.17",
+    "python": "3.11.9",
+    "heartbeatAt": "2024-04-25T15:02:38.536714",
+    "startedAt": "2024-04-25T15:02:37.672821",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "<python with no main file>",
+    "codePathLocal": null,
+    "git": {
+        "remote": "git@github.com:ElliotButz/ESL2024.git",
+        "commit": "a9a0af3a9bda7befa01e0f46124dd5bd817ebf57"
+    },
+    "email": "elliot.butz@free.fr",
+    "root": "/home/ebutz/ESL2024",
+    "host": "gpu4.lirmm.fr",
+    "username": "ebutz",
+    "executable": "/home/ebutz/miniconda3/envs/pyg2/bin/python",
+    "cpu_count": 20,
+    "cpu_count_logical": 40,
+    "cpu_freq": {
+        "current": 2.6050500000000008,
+        "min": 1200.0,
+        "max": 3400.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.635,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.603,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.6,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.654,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.609,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.848,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.675,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.6,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.845,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.6,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3.001,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.621,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2.599,
+            "min": 1200.0,
+            "max": 3400.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 471.201416015625,
+            "used": 308.01294708251953
+        }
+    },
+    "gpu": "NVIDIA GeForce GTX 1080 Ti",
+    "gpu_count": 4,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GTX 1080 Ti",
+            "memory_total": 11811160064
+        },
+        {
+            "name": "NVIDIA GeForce GTX 1080 Ti",
+            "memory_total": 11811160064
+        },
+        {
+            "name": "NVIDIA GeForce GTX 1080 Ti",
+            "memory_total": 11811160064
+        },
+        {
+            "name": "NVIDIA GeForce GTX 1080 Ti",
+            "memory_total": 11811160064
+        }
+    ],
+    "memory": {
+        "total": 109.90286254882812
+    }
+}

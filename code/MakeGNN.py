@@ -33,15 +33,16 @@ from torchmetrics.retrieval import RetrievalMRR, RetrievalHitRate
 import play_with_complex as pwc
 
 # How to calculate loss ?
-#  Choices are : 'usual', 'rand_linsim', linsim', 'gaussian_noise'usual'
-labels_type = 'usual'
+# Choices are : 'usual', 'rand_linsim', linsim', 'gaussian_noise', 'usual'.
+labels_type = 'linsim'
 
 # How many epochs between 2 time-consuming evaluations ?
-eval_period = 5
+eval_period = 1
 
 # Wandb
 xp_name = 'GNN Baseline VS LinSim VS Noise'
-run_name = f'{labels_type} labels for GNN'
+run_name = f'family train for {labels_type} labels'
+print(xp_name,':',run_name)
 
 # Iric
 iric_path = '/home/ebutz/ESL2024/data/full_iric/iric.csv'
@@ -72,7 +73,7 @@ config.train_neg_sampling_ratio=224
 config.epochs=18
 config.disjoint_train_ratio=0.6
 config.lr=0.0015308253347932983
-config.stopper_metric= 'mrr'
+config.stopper_metric= 'hit_at_10'
 config.stopper_direction="maximize"
 config.stopper_patience=5
 config.stopper_frequency=1
@@ -89,21 +90,17 @@ config.attention_heads=4
 config.homogeneous = False
 config.labels = {'head' : 'genes', 'relation' : 'gene_ontology', 'tail' : 'go'}
 
-print(type(wandb.config))
-print(config.homogeneous)
-print(config.val_ratio)
-
+print('Graph is homogeneous :',config.homogeneous)
 
 data = load_iric_data('/home/ebutz/ESL2024/data/full_iric/iric.csv', featureless=False)
+GO_edge_index = data['go', 'is_a', 'go'].edge_index # Important to extract ontology before making graph undirected
 data  = T.ToUndirected(merge=True)(data) # Convert the graph to an undirected graph. Creates reverse edges for each edge.
 data = T.RemoveDuplicatedEdges()(data) # Remove duplicated edges
 print(data)
-assert data.validate()
+print('data look valid : ',data.validate())
 
 train_data, val_data, test_data = split_data(data, config)
 train_loader, val_loader, test_loader = build_dataloaders(train_data, val_data, test_data, config)
-
-batchy = next(iter(train_loader))
 
 # # ------------- Loading ontology ------------- #
 
@@ -125,7 +122,7 @@ pwc.map_to_GO        = idx_to_go
 pwc.mapped_alt_tails = None
 pwc.device           = device
 
-# ------------- Making datasets ------------- #
+# ------------- Model setup ------------- #
 
 gnn_layers = get_gnn_layers(config)
 norm_layers = get_norm_layers(config, len(data.node_types))
@@ -161,6 +158,8 @@ def evaluate(config, loader, model, criterion, compute_all_metrics=False, loader
         A tuple of the evaluation metric and the loss, depending on the value of `stopper_metric`.
         If compute_all_metrics is True, the function logs all metrics to W&B.
     """
+
+    print("Evaluation...")
     model.eval()
     num_neg_samples = loader.neg_sampling.amount
     with torch.no_grad():
@@ -202,6 +201,7 @@ def evaluate(config, loader, model, criterion, compute_all_metrics=False, loader
             # if stopper_metric and not compute_all_metrics:
             #     if index_end >= 2048: # Compute approx. intermediate metric on a few datapoints to speed up hyperopt process
             #         break 
+
 
         model.train()
 
@@ -259,6 +259,7 @@ def evaluate(config, loader, model, criterion, compute_all_metrics=False, loader
                 f"{loader_type}MRR": mrr, f"{loader_type}hit_at_10": hit_at_10, f"{loader_type}hit_at_5": hit_at_5, f"{loader_type}hit_at_3": hit_at_3, f"{loader_type}hit_at_1": hit_at_1
             })
 
+    return mrr, eval_loss
 
 
 model = Model(config, data, norm_layers, gnn_layers).to(device)
@@ -267,7 +268,8 @@ model = Model(config, data, norm_layers, gnn_layers).to(device)
 criterion = sigmoid_focal_loss
 optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 # optimizer = Lion(model.parameters(), lr=config.lr, weight_decay=1e-2)
-early_stopper = EarlyStopper(frequency=config.stopper_frequency, patience=config.stopper_patience, direction=config.stopper_direction, relative_delta=config.stopper_relative_delta)
+early_stopper = EarlyStopper(frequency=config.stopper_frequency, patience=config.stopper_patience,
+                             direction=config.stopper_direction, relative_delta=config.stopper_relative_delta)
 # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
 
 @timer_func
@@ -283,21 +285,27 @@ def train(config, train_loader, val_loader, model, criterion, optimizer, early_s
             neg_samples  = torch.zeros(len(sampled_data[config.labels['tail']].dst_neg_index.view(-1)), device=device) # As many zeroes as there are negative samples * batch_size
             ground_truth = torch.cat((pos_samples, neg_samples))
 
+            false_tails = sampled_data[config.labels['tail']].dst_neg_index.view(-1)
+            true_tails = sampled_data['go']['dst_pos_index']
+            true_tails = torch.repeat_interleave(true_tails,int(false_tails.size()[0]/true_tails.size()[0]))
+
+
             if labels_type == 'linsim':
-                false_tails = batchy[config.labels['tail']].dst_neg_index.view(-1)
-                true_tails = batchy['go']['dst_pos_index']
-                true_tails = torch.repeat_interleave(true_tails,int(false_tails.size()[0]/true_tails.size()[0]))
-                linsims = pwc.lin_sims_for_batch(true_tails, false_tails)
-                lin_neg_samples = linsims
+                
+                lin_neg_samples = pwc.lin_sims_for_batch(true_tails, false_tails)
+
+                pos_samples = pos_samples.to(device)
+                lin_neg_samples = lin_neg_samples.to(device)
+
                 lin_ground_truth = torch.cat((pos_samples, lin_neg_samples))
                 loss = criterion(pred, lin_ground_truth, gamma=config.gamma, alpha=config.alpha)
 
             if labels_type == 'rand_linsim':
-                false_tails = batchy[config.labels['tail']].dst_neg_index.view(-1)
-                true_tails = batchy['go']['dst_pos_index']
-                true_tails = torch.repeat_interleave(true_tails,int(false_tails.size()[0]/true_tails.size()[0]))
+
                 linsims = pwc.lin_sims_for_batch(true_tails, false_tails)
                 lin_neg_samples = pwc.shuffle_tensor(linsims)
+                lin_neg_samples.to(device)
+                
                 lin_ground_truth = torch.cat((pos_samples, lin_neg_samples))
                 loss = criterion(pred, lin_ground_truth, gamma=config.gamma, alpha=config.alpha)
 
@@ -339,6 +347,7 @@ def train(config, train_loader, val_loader, model, criterion, optimizer, early_s
     print("Training done.")
 
 train(config, train_loader, val_loader, model, criterion, optimizer, early_stopper, labels_type=config.labels_type, eval_period = eval_period)
-evaluate(config,  val_loader, model, criterion, compute_all_metrics=True, loader_type='validation', stopper_metric=False)
-evaluate(config, test_loader, model, criterion, compute_all_metrics=True, loader_type='test'      , stopper_metric=False)
+evaluate(config,  val_loader, model, criterion, compute_all_metrics=False, loader_type='validation', stopper_metric='hit_at_10')
+evaluate(config, test_loader, model, criterion, compute_all_metrics=False, loader_type='test'      , stopper_metric='hit_at_10')
 
+wandb.finish
