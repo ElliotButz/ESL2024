@@ -18,8 +18,9 @@ def shuffle_tensor(t: torch.Tensor):
     tensor([[0, 1, 2, 3, 4, 5],  OR tensor([[6, 7, 8, 9, 0, 1],
             [6, 7, 8, 9, 0, 1]])            [0, 1, 2, 3, 4, 5]])
     '''
-    idx = torch.randperm(t.shape[0])
-    return t[idx].view(t.size())
+    indexes = torch.randperm(t.shape[0])
+    t = t[indexes]
+    return t[indexes]
 
 def random_sample(
     head_index: torch.Tensor,
@@ -431,9 +432,6 @@ class tail_only_ComplEx(ComplEx):
             tail_index: torch.Tensor,
             ) -> torch.Tensor:
             
-        '''
-        tail_only_ComplEx.loss() modified to have a linSim instead of label 0 on false tails.
-        '''
 
         pos, neg  = make_pos_and_neg(head_index,rel_type, tail_index,self.neg_for_pos)
 

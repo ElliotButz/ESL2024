@@ -129,7 +129,6 @@ def try_to_associate_family_neg(id, family_neg_dict, num_neg):
         print(f'node not found in dict ! {id}')
         return torch.tensor(random.sample(range(1, 40000), num_neg))
     
-
 def make_family_neg_for_batch(batch, family_neg_dict):
     
     num_neg = batch['go']['dst_neg_index'].size()[1]

@@ -285,7 +285,7 @@ def split_data(data, config):
     return split(data)
 
 @timer_func
-def build_dataloaders(train_data, val_data, test_data, config):
+def build_dataloaders(train_data, val_data, test_data, config, load_subgraph = True):
     """
     Build data loaders for training, validation, and testing.
 
@@ -315,19 +315,34 @@ def build_dataloaders(train_data, val_data, test_data, config):
         edge_label_index = ((config.labels['head'], config.labels['relation'], config.labels['tail']), train_data[config.labels['head'], config.labels['relation'], config.labels['tail']].edge_label_index)
     else:
         edge_label_index = None
-        
-    train_loader = LinkNeighborLoader(
-        data=train_data,
-        num_neighbors=config.num_neighbors, # Sample for each edge 20 neighbors in the first hop and at most 10 in the second.
-        neg_sampling=NegativeSampling(mode="triplet", amount=config.train_neg_sampling_ratio), # Samples 500 negative edges per positive edge in the subgraph
-        # Seed supervision edges from which to sample the subgraph that will be used for message passing.
-        edge_label_index=edge_label_index,
-        edge_label=None,
-        batch_size=config.batch_size,
-        shuffle=True, # Shuffle data each epoch
-        pin_memory=True,
-        num_workers=5
-    )
+    
+    if load_subgraph == True :
+        train_loader = LinkNeighborLoader(
+            data=train_data,
+            num_neighbors=config.num_neighbors, # Sample for each edge 20 neighbors in the first hop and at most 10 in the second.
+            neg_sampling=NegativeSampling(mode="triplet", amount=config.train_neg_sampling_ratio), # Samples 500 negative edges per positive edge in the subgraph
+            # Seed supervision edges from which to sample the subgraph that will be used for message passing.
+            edge_label_index=edge_label_index,
+            edge_label=None,
+            batch_size=config.batch_size,
+            shuffle=True, # Shuffle data each epoch
+            pin_memory=True,
+            num_workers=5
+        )
+    else:
+        print("Using full graph while train.")
+        train_loader = LinkNeighborLoader(
+            data=train_data,
+            num_neighbors=config.num_neighbors, # Sample for each edge 20 neighbors in the first hop and at most 10 in the second.
+            neg_sampling=NegativeSampling(mode="triplet", amount=config.train_neg_sampling_ratio), # Samples 500 negative edges per positive edge in the subgraph
+            # Seed supervision edges from which to sample the subgraph that will be used for message passing.
+            edge_label_index=edge_label_index,
+            edge_label=None,
+            batch_size=config.batch_size,
+            shuffle=True, # Shuffle data each epoch
+            pin_memory=True,
+            num_workers=5
+        )
 
     eval_batch_size = config.batch_size
     if config.train_neg_sampling_ratio < 1000: # Possible OOM issues as evaluation batch size are going to be larger than during training

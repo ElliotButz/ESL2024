@@ -5,7 +5,6 @@ import torch
 # import usefull_little_functions
 
 
-
 def nx_predecessors(graph, node):
     """
     Finds predecessors of a node in a graph.
